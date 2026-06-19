@@ -2,7 +2,7 @@
 Contributors: Primary ICT Support Ltd
 Requires at least: 5.8
 Requires PHP: 7.4
-Stable tag: 1.0.7
+Stable tag: 1.0.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,6 +15,7 @@ Google Drive Folder Viewer & Policy Click Tracker displays public Google Drive f
 Features include:
 
 * Google Drive folder display via shortcode.
+* Shared Drive folder support.
 * Configurable list design.
 * Click tracking with IP address logging.
 * Threshold-based alert emails.
@@ -39,6 +40,9 @@ Example:
 This plugin can store visitor IP addresses when users click listed documents. Site owners should mention this in their privacy policy where required.
 
 == Changelog ==
+
+= 1.0.8 =
+* Added Google Shared Drive support to folder document requests.
 
 = 1.0.7 =
 * Added GitHub Releases updater support.

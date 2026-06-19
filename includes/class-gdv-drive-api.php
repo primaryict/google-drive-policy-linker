@@ -119,6 +119,8 @@ class GDV_Drive_API
 				'fields'   => 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, iconLink, modifiedTime, size)',
 				'pageSize' => 100,
 				'orderBy'  => 'folder,name',
+				'includeItemsFromAllDrives' => 'true',
+				'supportsAllDrives'         => 'true',
 			);
 
 			if (! empty($page_token)) {
