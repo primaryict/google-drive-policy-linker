@@ -1,0 +1,161 @@
+.gdv-folder-wrapper {
+	--gdv-bg: #ffffff;
+	--gdv-hover-bg: #f3f7fb;
+	--gdv-text: #1f2937;
+	--gdv-hover-text: #0b5cab;
+	--gdv-meta: #646970;
+	--gdv-border: #d9e2ec;
+	--gdv-text-size: 16px;
+	--gdv-meta-size: 13px;
+	--gdv-icon-size: 38px;
+	--gdv-row-padding: 14px;
+	--gdv-border-radius: 8px;
+	--gdv-font-family: inherit;
+	margin: 1.5rem 0;
+}
+
+.gdv-title {
+	margin: 0 0 0.75rem;
+}
+
+.gdv-file-list {
+	display: grid;
+	gap: 0.55rem;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.gdv-file-item {
+	margin: 0;
+	padding: 0;
+}
+
+.gdv-policy-link {
+	align-items: center;
+	background: var(--gdv-bg);
+	border: 1px solid var(--gdv-border);
+	border-radius: var(--gdv-border-radius);
+	box-sizing: border-box;
+	color: var(--gdv-text);
+	display: flex;
+	font-family: var(--gdv-font-family);
+	font-size: var(--gdv-text-size);
+	gap: 1rem;
+	justify-content: space-between;
+	line-height: 1.35;
+	padding: var(--gdv-row-padding);
+	text-decoration: none;
+	transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+	width: 100%;
+}
+
+.gdv-policy-link:hover,
+.gdv-policy-link:focus {
+	background: var(--gdv-hover-bg);
+	color: var(--gdv-hover-text);
+	text-decoration: none;
+	transform: translateY(-1px);
+}
+
+.gdv-policy-link:focus {
+	box-shadow: 0 0 0 3px rgba(34, 113, 177, 0.22);
+	outline: none;
+}
+
+.gdv-file-main {
+	align-items: center;
+	display: flex;
+	gap: 0.75rem;
+	min-width: 0;
+}
+
+.gdv-file-icon {
+	align-items: center;
+	background: #eef2f7;
+	border-radius: 6px;
+	color: #334155;
+	display: inline-flex;
+	flex: 0 0 var(--gdv-icon-size);
+	font-size: max(10px, calc(var(--gdv-icon-size) * 0.29));
+	font-weight: 800;
+	height: var(--gdv-icon-size);
+	justify-content: center;
+	letter-spacing: 0;
+	line-height: 1;
+	width: var(--gdv-icon-size);
+}
+
+.gdv-file-name {
+	color: inherit;
+	font-weight: 700;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.gdv-file-meta {
+	color: var(--gdv-meta);
+	flex: 0 0 auto;
+	font-size: var(--gdv-meta-size);
+	line-height: 1.3;
+	text-align: right;
+	white-space: nowrap;
+}
+
+.gdv-policy-link:hover .gdv-file-meta,
+.gdv-policy-link:focus .gdv-file-meta {
+	color: inherit;
+}
+
+.gdv-file-type-pdf .gdv-file-icon {
+	background: #fee2e2;
+	color: #b91c1c;
+}
+
+.gdv-file-type-document .gdv-file-icon {
+	background: #dbeafe;
+	color: #1d4ed8;
+}
+
+.gdv-file-type-spreadsheet .gdv-file-icon {
+	background: #dcfce7;
+	color: #15803d;
+}
+
+.gdv-file-type-presentation .gdv-file-icon {
+	background: #ffedd5;
+	color: #c2410c;
+}
+
+.gdv-file-type-image .gdv-file-icon {
+	background: #f3e8ff;
+	color: #7e22ce;
+}
+
+.gdv-file-type-folder .gdv-file-icon {
+	background: #fef3c7;
+	color: #a16207;
+}
+
+.gdv-empty,
+.gdv-error {
+	margin: 1rem 0;
+}
+
+.gdv-error {
+	color: #b32d2e;
+}
+
+@media (max-width: 640px) {
+	.gdv-policy-link {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 0.65rem;
+	}
+
+	.gdv-file-meta {
+		padding-left: calc(var(--gdv-icon-size) + 0.75rem);
+		text-align: left;
+		white-space: normal;
+	}
+}
