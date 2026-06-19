@@ -2,7 +2,7 @@
 Contributors: Primary ICT Support Ltd
 Requires at least: 5.8
 Requires PHP: 7.4
-Stable tag: 1.0.6
+Stable tag: 1.0.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,6 +20,7 @@ Features include:
 * Threshold-based alert emails.
 * Primary ICT Support admin dashboard.
 * Click stats with IP address search.
+* WordPress plugin-screen updates from GitHub Releases.
 
 == Installation ==
 
@@ -38,6 +39,9 @@ Example:
 This plugin can store visitor IP addresses when users click listed documents. Site owners should mention this in their privacy policy where required.
 
 == Changelog ==
+
+= 1.0.7 =
+* Added GitHub Releases updater support.
 
 = 1.0.6 =
 * Added Primary ICT Support branded admin styling.

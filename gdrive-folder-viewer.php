@@ -4,13 +4,14 @@
  * Plugin Name:       Google Drive Folder Viewer & Policy Click Tracker
  * Plugin URI:        https://primaryictsupport.co.uk/
  * Description:       Display Google Drive policy folders with styled file links, click tracking, alerts, IP logs, and simple admin reporting.
- * Version:           1.0.6
+ * Version:           1.0.7
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Primary ICT Support Ltd
  * Author URI:        https://primaryictsupport.co.uk/
  * License:           GPL v2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Update URI:        https://github.com/primaryict/google-drive-policy-linker
  * Text Domain:       gdrive-folder-viewer
  */
 
@@ -19,7 +20,7 @@ if (! defined('ABSPATH')) {
 	exit;
 }
 
-define('GDV_VERSION', '1.0.6');
+define('GDV_VERSION', '1.0.7');
 define('GDV_PLUGIN_FILE', __FILE__);
 define('GDV_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('GDV_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -35,6 +36,7 @@ require_once GDV_PLUGIN_DIR . 'includes/class-gdv-drive-api.php';
 require_once GDV_PLUGIN_DIR . 'includes/class-gdv-shortcode.php';
 require_once GDV_PLUGIN_DIR . 'includes/class-gdv-click-tracker.php';
 require_once GDV_PLUGIN_DIR . 'includes/class-gdv-admin.php';
+require_once GDV_PLUGIN_DIR . 'includes/class-gdv-github-updater.php';
 
 register_activation_hook(__FILE__, array('GDV_Activator', 'activate'));
 register_deactivation_hook(__FILE__, array('GDV_Deactivator', 'deactivate'));
@@ -51,6 +53,7 @@ function gdv_boot_plugin()
 
 	if (is_admin()) {
 		new GDV_Admin();
+		new GDV_GitHub_Updater();
 	}
 }
 add_action('plugins_loaded', 'gdv_boot_plugin');
