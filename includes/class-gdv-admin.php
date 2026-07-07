@@ -139,7 +139,8 @@ class GDV_Admin {
 		$tracker      = new GDV_Click_Tracker();
 		$window_hours = max( 1, (int) get_option( 'gdv_threshold_window_hours', 24 ) );
 		$count        = $tracker->get_click_count( $window_hours );
-		$sent         = $tracker->send_alert_email( $count, $window_hours, true );
+		$analysis     = $tracker->get_gemini_analysis_for_alert( $window_hours );
+		$sent         = $tracker->send_alert_email( $count, $window_hours, true, $analysis );
 
 		$this->redirect_with_notice( $sent ? 'test_sent' : 'test_failed' );
 	}
@@ -353,43 +354,31 @@ class GDV_Admin {
 					<td><input name="gdv_cache_hours" id="gdv_cache_hours" type="number" min="1" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_cache_hours', 6 ) ); ?>"> <?php esc_html_e( 'hours', 'gdrive-folder-viewer' ); ?></td>
 				</tr>
 				<tr>
-					<th scope="row"><label for="gdv_click_threshold"><?php esc_html_e( 'Alert threshold', 'gdrive-folder-viewer' ); ?></label></th>
-					<td><input name="gdv_click_threshold" id="gdv_click_threshold" type="number" min="1" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_click_threshold', 20 ) ); ?>"> <?php esc_html_e( 'clicks', 'gdrive-folder-viewer' ); ?></td>
+					<th scope="row"><label for="gdv_click_threshold"><?php esc_html_e( 'Review trigger threshold', 'gdrive-folder-viewer' ); ?></label></th>
+					<td>
+						<input name="gdv_click_threshold" id="gdv_click_threshold" type="number" min="1" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_click_threshold', 20 ) ); ?>"> <?php esc_html_e( 'clicks', 'gdrive-folder-viewer' ); ?>
+						<p class="description"><?php esc_html_e( 'When this many document clicks are recorded inside the review window, the plugin sends the recent activity to Gemini for review. An email is only sent if that review also meets the confidence threshold set on the Gemini AI tab.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
 				</tr>
 				<tr>
-					<th scope="row"><label for="gdv_threshold_window_hours"><?php esc_html_e( 'Alert window', 'gdrive-folder-viewer' ); ?></label></th>
-					<td><input name="gdv_threshold_window_hours" id="gdv_threshold_window_hours" type="number" min="1" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_threshold_window_hours', 24 ) ); ?>"> <?php esc_html_e( 'hours', 'gdrive-folder-viewer' ); ?></td>
+					<th scope="row"><label for="gdv_threshold_window_hours"><?php esc_html_e( 'Review window', 'gdrive-folder-viewer' ); ?></label></th>
+					<td>
+						<input name="gdv_threshold_window_hours" id="gdv_threshold_window_hours" type="number" min="1" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_threshold_window_hours', 24 ) ); ?>"> <?php esc_html_e( 'hours', 'gdrive-folder-viewer' ); ?>
+						<p class="description"><?php esc_html_e( 'The rolling time period used when counting clicks for the review trigger.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
 				</tr>
 				<tr>
 					<th scope="row"><label for="gdv_alert_cooldown_hours"><?php esc_html_e( 'Alert cooldown', 'gdrive-folder-viewer' ); ?></label></th>
-					<td><input name="gdv_alert_cooldown_hours" id="gdv_alert_cooldown_hours" type="number" min="0" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_alert_cooldown_hours', 24 ) ); ?>"> <?php esc_html_e( 'hours', 'gdrive-folder-viewer' ); ?></td>
+					<td>
+						<input name="gdv_alert_cooldown_hours" id="gdv_alert_cooldown_hours" type="number" min="0" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_alert_cooldown_hours', 24 ) ); ?>"> <?php esc_html_e( 'hours', 'gdrive-folder-viewer' ); ?>
+						<p class="description"><?php esc_html_e( 'After an alert is sent, wait this long before sending another one for similar activity.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
 				</tr>
 				<tr>
 					<th scope="row"><label for="gdv_alert_emails"><?php esc_html_e( 'Alert recipients', 'gdrive-folder-viewer' ); ?></label></th>
 					<td>
 						<input name="gdv_alert_emails" id="gdv_alert_emails" type="text" class="regular-text" value="<?php echo esc_attr( get_option( 'gdv_alert_emails', get_option( 'admin_email' ) ) ); ?>">
 						<p class="description"><?php esc_html_e( 'Separate multiple email addresses with commas.', 'gdrive-folder-viewer' ); ?></p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="gdv_gemini_api_key"><?php esc_html_e( 'Gemini API key', 'gdrive-folder-viewer' ); ?></label></th>
-					<td>
-						<input name="gdv_gemini_api_key" id="gdv_gemini_api_key" type="password" class="regular-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_api_key', '' ) ); ?>" autocomplete="off">
-						<p class="description"><?php esc_html_e( 'Optional. When set, the click threshold triggers Gemini analysis before alert emails are sent.', 'gdrive-folder-viewer' ); ?></p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="gdv_gemini_model"><?php esc_html_e( 'Gemini model', 'gdrive-folder-viewer' ); ?></label></th>
-					<td>
-						<input name="gdv_gemini_model" id="gdv_gemini_model" type="text" class="regular-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_model', GDV_Gemini_Analyzer::DEFAULT_MODEL ) ); ?>" autocomplete="off">
-						<p class="description"><?php esc_html_e( 'Default: gemini-3.5-flash. Change this if Google recommends a newer Gemini API model.', 'gdrive-folder-viewer' ); ?></p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="gdv_gemini_confidence_threshold"><?php esc_html_e( 'Gemini confidence threshold', 'gdrive-folder-viewer' ); ?></label></th>
-					<td>
-						<input name="gdv_gemini_confidence_threshold" id="gdv_gemini_confidence_threshold" type="number" min="0" max="100" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_confidence_threshold', 75 ) ); ?>"> %
-						<p class="description"><?php esc_html_e( 'Gemini must mark inspection activity as likely and meet this confidence score before the alert email is sent.', 'gdrive-folder-viewer' ); ?></p>
 					</td>
 				</tr>
 				<tr>
@@ -613,7 +602,7 @@ class GDV_Admin {
 		}
 		?>
 		<h2><?php esc_html_e( 'Gemini AI Manual Check', 'gdrive-folder-viewer' ); ?></h2>
-		<p><?php esc_html_e( 'Run a one-off check for unusual policy click activity. The result is shown here only and no alert email is sent.', 'gdrive-folder-viewer' ); ?></p>
+		<p><?php esc_html_e( 'Configure the Gemini connection and run one-off checks for unusual policy click activity. Manual checks show the result on this page only and do not send alert emails.', 'gdrive-folder-viewer' ); ?></p>
 
 		<div class="gdv-gemini-status <?php echo esc_attr( $is_configured ? 'gdv-gemini-status--ready' : 'gdv-gemini-status--missing' ); ?>">
 			<strong><?php esc_html_e( 'Connection status:', 'gdrive-folder-viewer' ); ?></strong>
@@ -626,9 +615,39 @@ class GDV_Admin {
 				);
 				?>
 			<?php else : ?>
-				<?php esc_html_e( 'Gemini API key missing. Add it in Settings before running a check.', 'gdrive-folder-viewer' ); ?>
+				<?php esc_html_e( 'Gemini API key missing. Add it below before running a check.', 'gdrive-folder-viewer' ); ?>
 			<?php endif; ?>
 		</div>
+
+		<form method="post" action="<?php echo esc_url( admin_url( 'options.php' ) ); ?>" class="gdv-gemini-settings-form">
+			<?php settings_fields( 'gdv_settings' ); ?>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="gdv_gemini_api_key"><?php esc_html_e( 'Gemini API key', 'gdrive-folder-viewer' ); ?></label></th>
+					<td>
+						<input name="gdv_gemini_api_key" id="gdv_gemini_api_key" type="password" class="regular-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_api_key', '' ) ); ?>" autocomplete="off">
+						<p class="description"><?php esc_html_e( 'Used when the review trigger threshold is reached and for manual checks from this tab.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="gdv_gemini_model"><?php esc_html_e( 'Gemini model', 'gdrive-folder-viewer' ); ?></label></th>
+					<td>
+						<input name="gdv_gemini_model" id="gdv_gemini_model" type="text" class="regular-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_model', GDV_Gemini_Analyzer::DEFAULT_MODEL ) ); ?>" autocomplete="off">
+						<p class="description"><?php esc_html_e( 'Default: gemini-3.5-flash. Change this if Google recommends a newer Gemini API model.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="gdv_gemini_confidence_threshold"><?php esc_html_e( 'Alert confidence threshold', 'gdrive-folder-viewer' ); ?></label></th>
+					<td>
+						<input name="gdv_gemini_confidence_threshold" id="gdv_gemini_confidence_threshold" type="number" min="0" max="100" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_confidence_threshold', 75 ) ); ?>"> %
+						<p class="description"><?php esc_html_e( 'After the click count triggers a review, the alert email is only sent when the review marks the activity as likely and meets this confidence score.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
+				</tr>
+			</table>
+			<?php submit_button( __( 'Save Gemini Settings', 'gdrive-folder-viewer' ) ); ?>
+		</form>
+
+		<hr>
 
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=gemini' ) ); ?>" class="gdv-gemini-form">
 			<?php wp_nonce_field( 'gdv_manual_gemini_check', 'gdv_manual_gemini_nonce' ); ?>

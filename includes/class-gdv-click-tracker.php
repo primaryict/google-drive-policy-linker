@@ -305,54 +305,8 @@ class GDV_Click_Tracker {
 			? sprintf( '[%s] TEST: policy document activity alert', $site_name )
 			: sprintf( '[%s] Unusual policy document activity detected', $site_name );
 
-		$lines = array();
-		if ( $is_test ) {
-			$lines[] = 'This is a TEST email triggered manually from the plugin settings page.';
-			$lines[] = '';
-		}
-		$lines[] = sprintf( 'An unusual level of activity has been detected on policy documents on %s.', $site_name );
-		$lines[] = '';
-		$lines[] = sprintf( 'Total clicks in the last %d hour(s): %d', $window_hours, $count );
-		$lines[] = '';
-		$lines[] = 'Most viewed documents in this period:';
-
-		if ( ! empty( $top_files ) ) {
-			foreach ( $top_files as $row ) {
-				$lines[] = sprintf( '- %s: %d click(s)', $row->file_name, (int) $row->clicks );
-			}
-		} else {
-			$lines[] = '(no individual file data available)';
-		}
-
-		if ( ! empty( $analysis['analysis'] ) && is_array( $analysis['analysis'] ) ) {
-			$ai = $analysis['analysis'];
-			$lines[] = '';
-			$lines[] = 'Gemini AI assessment:';
-			$lines[] = 'Inspection likely: ' . ( ! empty( $ai['inspection_likely'] ) ? 'Yes' : 'No' );
-			$lines[] = 'Confidence score: ' . (int) $ai['confidence_score'] . '%';
-			if ( ! empty( $ai['triggering_user'] ) ) {
-				$lines[] = 'Triggering user: ' . $ai['triggering_user'];
-			}
-			if ( ! empty( $ai['reason'] ) ) {
-				$lines[] = 'Reason: ' . $ai['reason'];
-			}
-			if ( ! empty( $ai['recommended_action'] ) ) {
-				$lines[] = 'Recommended action: ' . $ai['recommended_action'];
-			}
-		} elseif ( ! empty( $analysis['error'] ) ) {
-			$lines[] = '';
-			$lines[] = 'Gemini AI assessment could not be completed: ' . $analysis['error'];
-		}
-
-		$lines[] = '';
-		$lines[] = 'A sudden spike in policy document views can sometimes precede an Ofsted visit or inspection, as parents, staff or inspectors often review policies beforehand. You may wish to review recent activity and double-check that your published policies are up to date.';
-		$lines[] = '';
-		$lines[] = 'View detailed stats: ' . admin_url( 'admin.php?page=gdv-settings&tab=stats' );
-
 		$graph_svg = $this->get_click_graph_svg( 14, 6, 900, 360 );
-		$body = '<p>' . esc_html( implode( "\n", $lines ) ) . '</p>';
-		$body = nl2br( $body );
-		$body .= '<h2>Recent policy click activity</h2>' . $graph_svg;
+		$body      = $this->get_alert_email_body( $site_name, $count, $window_hours, $top_files, $graph_svg, $is_test, $analysis );
 
 		$recipients = $this->get_recipient_emails();
 		$headers = array( 'Content-Type: text/html; charset=UTF-8' );
@@ -366,6 +320,119 @@ class GDV_Click_Tracker {
 		}
 
 		return $sent;
+	}
+
+	/**
+	 * Builds the branded alert email body.
+	 *
+	 * @param string $site_name    Website name.
+	 * @param int    $count        Number of clicks in the window.
+	 * @param int    $window_hours The lookback window, in hours.
+	 * @param array  $top_files    Most-clicked files.
+	 * @param string $graph_svg    Inline SVG graph markup.
+	 * @param bool   $is_test      Whether this is a test email.
+	 * @param array  $analysis     Optional analysis result wrapper.
+	 * @return string
+	 */
+	private function get_alert_email_body( $site_name, $count, $window_hours, $top_files, $graph_svg, $is_test, $analysis ) {
+		$stats_url          = admin_url( 'admin.php?page=gdv-settings&tab=stats' );
+		$assessment_summary = $this->get_alert_assessment_summary( $analysis );
+		$test_banner        = $is_test ? '<div style="background:#fff8e5;border-left:4px solid #dba617;color:#7a5600;margin:0 0 18px;padding:12px 14px;"><strong>Test alert:</strong> This email was triggered manually, using the same recent click data and review process as a natural threshold alert.</div>' : '';
+
+		$body  = '<div style="background:#f3f7fb;margin:0;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#193255;">';
+		$body .= '<div style="background:#ffffff;border-top:6px solid #00809b;margin:0 auto;max-width:760px;padding:0;">';
+		$body .= '<div style="padding:24px 28px 18px;">';
+		$body .= '<p style="color:#00809b;font-size:12px;font-weight:700;letter-spacing:0;margin:0 0 8px;text-transform:uppercase;">Primary ICT Support</p>';
+		$body .= '<h1 style="color:#193255;font-size:24px;line-height:1.25;margin:0;">Policy document activity alert</h1>';
+		$body .= '<p style="color:#526579;font-size:15px;line-height:1.6;margin:12px 0 0;">An unusual level of policy document activity has been detected on ' . esc_html( $site_name ) . '.</p>';
+		$body .= '</div>';
+		$body .= '<div style="padding:0 28px 24px;">';
+		$body .= $test_banner;
+		$body .= '<div style="background:#f3f7fb;border:1px solid #d9e2ec;margin:0 0 18px;padding:16px 18px;">';
+		$body .= '<p style="font-size:15px;line-height:1.6;margin:0;">There were <strong style="color:#e10713;">' . esc_html( (string) (int) $count ) . '</strong> policy document click(s) in the last <strong>' . esc_html( (string) (int) $window_hours ) . ' hour(s)</strong>. ' . esc_html( $assessment_summary ) . '</p>';
+		$body .= '</div>';
+		$body .= '<h2 style="color:#193255;font-size:18px;margin:22px 0 10px;">Most viewed documents</h2>';
+		$body .= $this->get_top_files_email_table( $top_files );
+		$body .= '<h2 style="color:#193255;font-size:18px;margin:24px 0 10px;">Recent policy click activity</h2>';
+		$body .= '<div style="border:1px solid #d9e2ec;margin:0 0 18px;overflow-x:auto;padding:8px;">' . $graph_svg . '</div>';
+		$body .= '<p style="color:#526579;font-size:14px;line-height:1.6;margin:0 0 18px;">A sudden spike in policy document views can sometimes precede an Ofsted visit or inspection, as parents, staff or inspectors may review policies beforehand. It would be sensible to review the recent activity and check that published policies are up to date.</p>';
+		$body .= '<p style="margin:0;"><a href="' . esc_url( $stats_url ) . '" style="background:#00809b;color:#ffffff;display:inline-block;font-weight:700;padding:10px 16px;text-decoration:none;">View detailed stats</a></p>';
+		$body .= '</div>';
+		$body .= '</div>';
+		$body .= '</div>';
+
+		return $body;
+	}
+
+	/**
+	 * Builds a natural-language assessment summary for alert emails.
+	 *
+	 * @param array $analysis Optional analysis result wrapper.
+	 * @return string
+	 */
+	private function get_alert_assessment_summary( $analysis ) {
+		if ( ! empty( $analysis['analysis'] ) && is_array( $analysis['analysis'] ) ) {
+			$result     = $analysis['analysis'];
+			$confidence = isset( $result['confidence_score'] ) ? (int) $result['confidence_score'] : 0;
+			$threshold  = max( 0, min( 100, (int) get_option( 'gdv_gemini_confidence_threshold', 75 ) ) );
+			$reason     = ! empty( $result['reason'] ) ? $result['reason'] : __( 'the recent pattern is unusual enough to warrant a closer look', 'gdrive-folder-viewer' );
+			$action     = ! empty( $result['recommended_action'] ) ? $result['recommended_action'] : __( 'Please review the latest click activity when convenient.', 'gdrive-folder-viewer' );
+
+			if ( empty( $result['inspection_likely'] ) || $confidence < $threshold ) {
+				return sprintf(
+					'The activity pattern was reviewed and does not currently meet the configured alert confidence threshold. The review confidence was %1$d%% against a %2$d%% threshold: %3$s. %4$s',
+					$confidence,
+					$threshold,
+					$reason,
+					$action
+				);
+			}
+
+			return sprintf(
+				'The activity pattern was reviewed and is considered worth attention with %1$d%% confidence: %2$s. %3$s',
+				$confidence,
+				$reason,
+				$action
+			);
+		}
+
+		if ( ! empty( $analysis['error'] ) ) {
+			return sprintf(
+				'The follow-up activity review could not be completed, so this alert has been sent from the click threshold alone. Review detail: %s',
+				$analysis['error']
+			);
+		}
+
+		return 'This alert has been sent because the configured click threshold was reached.';
+	}
+
+	/**
+	 * Builds the top files table for alert emails.
+	 *
+	 * @param array $top_files Most-clicked files.
+	 * @return string
+	 */
+	private function get_top_files_email_table( $top_files ) {
+		if ( empty( $top_files ) ) {
+			return '<p style="color:#526579;font-size:14px;margin:0 0 18px;">No individual file data was available for this period.</p>';
+		}
+
+		$html  = '<table role="presentation" style="border-collapse:collapse;margin:0 0 18px;width:100%;">';
+		$html .= '<thead><tr>';
+		$html .= '<th align="left" style="background:#f3f7fb;border:1px solid #d9e2ec;color:#193255;padding:10px;">Document</th>';
+		$html .= '<th align="left" style="background:#f3f7fb;border:1px solid #d9e2ec;color:#193255;padding:10px;width:90px;">Clicks</th>';
+		$html .= '</tr></thead><tbody>';
+
+		foreach ( $top_files as $row ) {
+			$html .= '<tr>';
+			$html .= '<td style="border:1px solid #d9e2ec;color:#193255;padding:10px;">' . esc_html( $row->file_name ) . '</td>';
+			$html .= '<td style="border:1px solid #d9e2ec;color:#193255;padding:10px;">' . esc_html( (string) (int) $row->clicks ) . '</td>';
+			$html .= '</tr>';
+		}
+
+		$html .= '</tbody></table>';
+
+		return $html;
 	}
 
 	/**
@@ -391,7 +458,7 @@ class GDV_Click_Tracker {
 	 * @param int $window_hours Lookback window.
 	 * @return array
 	 */
-	private function get_gemini_analysis_for_alert( $window_hours ) {
+	public function get_gemini_analysis_for_alert( $window_hours ) {
 		$analyzer = new GDV_Gemini_Analyzer();
 
 		if ( ! $analyzer->is_configured() ) {
