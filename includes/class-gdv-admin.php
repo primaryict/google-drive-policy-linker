@@ -17,6 +17,7 @@ class GDV_Admin {
 		add_action( 'admin_post_gdv_clear_cache', array( $this, 'handle_clear_cache' ) );
 		add_action( 'admin_post_gdv_send_test_alert', array( $this, 'handle_send_test_alert' ) );
 		add_action( 'admin_post_gdv_delete_clicks', array( $this, 'handle_delete_clicks' ) );
+		add_action( 'wp_dashboard_setup', array( $this, 'add_dashboard_widget' ) );
 	}
 
 	/**
@@ -51,6 +52,9 @@ class GDV_Admin {
 		register_setting( 'gdv_settings', 'gdv_threshold_window_hours', array( $this, 'sanitize_positive_int' ) );
 		register_setting( 'gdv_settings', 'gdv_alert_cooldown_hours', array( $this, 'sanitize_non_negative_int' ) );
 		register_setting( 'gdv_settings', 'gdv_alert_emails', array( $this, 'sanitize_email_list' ) );
+		register_setting( 'gdv_settings', 'gdv_gemini_api_key', array( $this, 'sanitize_text' ) );
+		register_setting( 'gdv_settings', 'gdv_gemini_model', array( $this, 'sanitize_gemini_model' ) );
+		register_setting( 'gdv_settings', 'gdv_gemini_confidence_threshold', array( $this, 'sanitize_percentage' ) );
 		register_setting( 'gdv_settings', 'gdv_delete_data_on_uninstall', array( $this, 'sanitize_checkbox' ) );
 		register_setting( 'gdv_design_settings', 'gdv_design_bg_color', array( $this, 'sanitize_color' ) );
 		register_setting( 'gdv_design_settings', 'gdv_design_hover_bg_color', array( $this, 'sanitize_color' ) );
@@ -77,7 +81,7 @@ class GDV_Admin {
 		}
 
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'settings';
-		$tab = in_array( $tab, array( 'settings', 'design', 'stats' ), true ) ? $tab : 'settings';
+		$tab = in_array( $tab, array( 'settings', 'design', 'stats', 'gemini' ), true ) ? $tab : 'settings';
 
 		echo '<div class="wrap picts-dashboard picts-plugin-page">';
 		echo '<div class="picts-plugin-page__hero">';
@@ -93,6 +97,8 @@ class GDV_Admin {
 		echo '<div class="picts-plugin-page__panel">';
 		if ( 'stats' === $tab ) {
 			$this->render_stats_tab();
+		} elseif ( 'gemini' === $tab ) {
+			$this->render_gemini_tab();
 		} elseif ( 'design' === $tab ) {
 			$this->render_design_tab();
 		} else {
@@ -154,6 +160,36 @@ class GDV_Admin {
 	}
 
 	/**
+	 * Adds a quick stats widget to the WordPress dashboard.
+	 *
+	 * @return void
+	 */
+	public function add_dashboard_widget() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		wp_add_dashboard_widget(
+			'gdv_policy_clicks_widget',
+			__( 'Policy Document Clicks', 'gdrive-folder-viewer' ),
+			array( $this, 'render_dashboard_widget' )
+		);
+	}
+
+	/**
+	 * Renders the WordPress dashboard widget.
+	 *
+	 * @return void
+	 */
+	public function render_dashboard_widget() {
+		$tracker = new GDV_Click_Tracker();
+		echo '<div class="gdv-dashboard-widget">';
+		echo $tracker->get_click_graph_svg( 7, 4, 700, 300 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo '<p><a class="button button-primary" href="' . esc_url( admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=stats' ) ) . '">' . esc_html__( 'View full stats', 'gdrive-folder-viewer' ) . '</a></p>';
+		echo '</div>';
+	}
+
+	/**
 	 * Text field sanitizer.
 	 *
 	 * @param mixed $value Raw value.
@@ -191,6 +227,49 @@ class GDV_Admin {
 	 */
 	public function sanitize_checkbox( $value ) {
 		return empty( $value ) ? 0 : 1;
+	}
+
+	/**
+	 * Percentage sanitizer.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return int
+	 */
+	public function sanitize_percentage( $value ) {
+		return max( 0, min( 100, absint( $value ) ) );
+	}
+
+	/**
+	 * Sanitizes a date field in Y-m-d format.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	private function sanitize_date_input( $value ) {
+		$value = sanitize_text_field( (string) $value );
+		$date  = DateTimeImmutable::createFromFormat( 'Y-m-d', $value, wp_timezone() );
+
+		if ( false === $date || $date->format( 'Y-m-d' ) !== $value ) {
+			return '';
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Sanitizes a Gemini model identifier.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_gemini_model( $value ) {
+		$model = sanitize_text_field( (string) $value );
+
+		if ( ! preg_match( '/^[a-z0-9._-]+$/', $model ) ) {
+			return GDV_Gemini_Analyzer::DEFAULT_MODEL;
+		}
+
+		return '' !== $model ? $model : GDV_Gemini_Analyzer::DEFAULT_MODEL;
 	}
 
 	/**
@@ -241,11 +320,13 @@ class GDV_Admin {
 		$settings_url = admin_url( 'admin.php?page=' . self::PAGE_SLUG );
 		$design_url   = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=design' );
 		$stats_url    = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=stats' );
+		$gemini_url   = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=gemini' );
 
 		echo '<h2 class="nav-tab-wrapper">';
 		echo '<a class="nav-tab ' . esc_attr( 'settings' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $settings_url ) . '">' . esc_html__( 'Settings', 'gdrive-folder-viewer' ) . '</a>';
 		echo '<a class="nav-tab ' . esc_attr( 'design' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $design_url ) . '">' . esc_html__( 'Design', 'gdrive-folder-viewer' ) . '</a>';
 		echo '<a class="nav-tab ' . esc_attr( 'stats' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $stats_url ) . '">' . esc_html__( 'Click Stats', 'gdrive-folder-viewer' ) . '</a>';
+		echo '<a class="nav-tab ' . esc_attr( 'gemini' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $gemini_url ) . '">' . esc_html__( 'Gemini AI', 'gdrive-folder-viewer' ) . '</a>';
 		echo '</h2>';
 	}
 
@@ -288,6 +369,27 @@ class GDV_Admin {
 					<td>
 						<input name="gdv_alert_emails" id="gdv_alert_emails" type="text" class="regular-text" value="<?php echo esc_attr( get_option( 'gdv_alert_emails', get_option( 'admin_email' ) ) ); ?>">
 						<p class="description"><?php esc_html_e( 'Separate multiple email addresses with commas.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="gdv_gemini_api_key"><?php esc_html_e( 'Gemini API key', 'gdrive-folder-viewer' ); ?></label></th>
+					<td>
+						<input name="gdv_gemini_api_key" id="gdv_gemini_api_key" type="password" class="regular-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_api_key', '' ) ); ?>" autocomplete="off">
+						<p class="description"><?php esc_html_e( 'Optional. When set, the click threshold triggers Gemini analysis before alert emails are sent.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="gdv_gemini_model"><?php esc_html_e( 'Gemini model', 'gdrive-folder-viewer' ); ?></label></th>
+					<td>
+						<input name="gdv_gemini_model" id="gdv_gemini_model" type="text" class="regular-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_model', GDV_Gemini_Analyzer::DEFAULT_MODEL ) ); ?>" autocomplete="off">
+						<p class="description"><?php esc_html_e( 'Default: gemini-3.5-flash. Change this if Google recommends a newer Gemini API model.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="gdv_gemini_confidence_threshold"><?php esc_html_e( 'Gemini confidence threshold', 'gdrive-folder-viewer' ); ?></label></th>
+					<td>
+						<input name="gdv_gemini_confidence_threshold" id="gdv_gemini_confidence_threshold" type="number" min="0" max="100" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_confidence_threshold', 75 ) ); ?>"> %
+						<p class="description"><?php esc_html_e( 'Gemini must mark inspection activity as likely and meet this confidence score before the alert email is sent.', 'gdrive-folder-viewer' ); ?></p>
 					</td>
 				</tr>
 				<tr>
@@ -444,6 +546,11 @@ class GDV_Admin {
 			?>
 		</p>
 
+		<h3><?php esc_html_e( 'Daily Policy Clicks', 'gdrive-folder-viewer' ); ?></h3>
+		<div class="gdv-admin-graph-wrap">
+			<?php echo $tracker->get_click_graph_svg( 14, 6, 900, 360 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+		</div>
+
 		<h3><?php esc_html_e( 'Top Documents', 'gdrive-folder-viewer' ); ?></h3>
 		<?php $this->render_top_files_table( $top_files ); ?>
 
@@ -465,6 +572,142 @@ class GDV_Admin {
 			<?php wp_nonce_field( 'gdv_delete_clicks' ); ?>
 			<?php submit_button( __( 'Delete All Click Logs', 'gdrive-folder-viewer' ), 'delete' ); ?>
 		</form>
+		<?php
+	}
+
+	/**
+	 * Renders Gemini manual testing tools.
+	 *
+	 * @return void
+	 */
+	private function render_gemini_tab() {
+		$this->render_admin_notice();
+		GDV_Activator::activate();
+
+		$timezone          = wp_timezone();
+		$today             = wp_date( 'Y-m-d', null, $timezone );
+		$default_start     = wp_date( 'Y-m-d', time() - ( 6 * DAY_IN_SECONDS ), $timezone );
+		$start_date        = isset( $_POST['gdv_gemini_start_date'] ) ? sanitize_text_field( wp_unslash( $_POST['gdv_gemini_start_date'] ) ) : $default_start;
+		$end_date          = isset( $_POST['gdv_gemini_end_date'] ) ? sanitize_text_field( wp_unslash( $_POST['gdv_gemini_end_date'] ) ) : $today;
+		$analysis          = null;
+		$analysis_error    = null;
+		$analyzer          = new GDV_Gemini_Analyzer();
+		$is_configured     = $analyzer->is_configured();
+		$is_manual_request = isset( $_POST['gdv_run_gemini_check'] );
+		$model             = $analyzer->get_model();
+
+		if ( $is_manual_request && check_admin_referer( 'gdv_manual_gemini_check', 'gdv_manual_gemini_nonce' ) ) {
+			$start_date = $this->sanitize_date_input( $start_date );
+			$end_date   = $this->sanitize_date_input( $end_date );
+
+			if ( '' === $start_date || '' === $end_date ) {
+				$analysis_error = new WP_Error( 'gdv_gemini_invalid_admin_dates', __( 'Please choose a valid start and end date.', 'gdrive-folder-viewer' ) );
+			} else {
+				$analysis = $analyzer->analyze_date_range( $start_date, $end_date );
+
+				if ( is_wp_error( $analysis ) ) {
+					$analysis_error = $analysis;
+					$analysis       = null;
+				}
+			}
+		}
+		?>
+		<h2><?php esc_html_e( 'Gemini AI Manual Check', 'gdrive-folder-viewer' ); ?></h2>
+		<p><?php esc_html_e( 'Run a one-off check for unusual policy click activity. The result is shown here only and no alert email is sent.', 'gdrive-folder-viewer' ); ?></p>
+
+		<div class="gdv-gemini-status <?php echo esc_attr( $is_configured ? 'gdv-gemini-status--ready' : 'gdv-gemini-status--missing' ); ?>">
+			<strong><?php esc_html_e( 'Connection status:', 'gdrive-folder-viewer' ); ?></strong>
+			<?php if ( $is_configured ) : ?>
+				<?php
+				printf(
+					/* translators: %s: Gemini model name */
+					esc_html__( 'Gemini API key saved. Using model: %s.', 'gdrive-folder-viewer' ),
+					esc_html( $model )
+				);
+				?>
+			<?php else : ?>
+				<?php esc_html_e( 'Gemini API key missing. Add it in Settings before running a check.', 'gdrive-folder-viewer' ); ?>
+			<?php endif; ?>
+		</div>
+
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=gemini' ) ); ?>" class="gdv-gemini-form">
+			<?php wp_nonce_field( 'gdv_manual_gemini_check', 'gdv_manual_gemini_nonce' ); ?>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="gdv_gemini_start_date"><?php esc_html_e( 'Start date', 'gdrive-folder-viewer' ); ?></label></th>
+					<td><input name="gdv_gemini_start_date" id="gdv_gemini_start_date" type="date" value="<?php echo esc_attr( $start_date ); ?>" max="<?php echo esc_attr( $today ); ?>"></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="gdv_gemini_end_date"><?php esc_html_e( 'End date', 'gdrive-folder-viewer' ); ?></label></th>
+					<td><input name="gdv_gemini_end_date" id="gdv_gemini_end_date" type="date" value="<?php echo esc_attr( $end_date ); ?>" max="<?php echo esc_attr( $today ); ?>"></td>
+				</tr>
+			</table>
+			<?php submit_button( __( 'Run Gemini Check', 'gdrive-folder-viewer' ), 'primary', 'gdv_run_gemini_check', true, $is_configured ? array() : array( 'disabled' => 'disabled' ) ); ?>
+		</form>
+
+		<p class="description"><?php esc_html_e( 'Click logs are grouped by anonymous user labels before being sent to Gemini. Raw IP addresses are not included in the request.', 'gdrive-folder-viewer' ); ?></p>
+
+		<?php
+		if ( $analysis_error ) {
+			echo '<div class="notice notice-error inline"><p>' . esc_html( $analysis_error->get_error_message() ) . '</p></div>';
+		}
+
+		if ( $analysis ) {
+			$this->render_gemini_analysis_result( $analysis );
+		}
+	}
+
+	/**
+	 * Displays a Gemini analysis result.
+	 *
+	 * @param array $analysis Analysis result.
+	 * @return void
+	 */
+	private function render_gemini_analysis_result( $analysis ) {
+		$threshold   = max( 0, min( 100, (int) get_option( 'gdv_gemini_confidence_threshold', 75 ) ) );
+		$confidence  = isset( $analysis['confidence_score'] ) ? (int) $analysis['confidence_score'] : 0;
+		$would_alert = ! empty( $analysis['inspection_likely'] ) && $confidence >= $threshold;
+		?>
+		<div class="gdv-gemini-result">
+			<h3><?php esc_html_e( 'Gemini Response', 'gdrive-folder-viewer' ); ?></h3>
+			<table class="widefat striped">
+				<tbody>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Inspection activity likely', 'gdrive-folder-viewer' ); ?></th>
+						<td><?php echo esc_html( ! empty( $analysis['inspection_likely'] ) ? __( 'Yes', 'gdrive-folder-viewer' ) : __( 'No', 'gdrive-folder-viewer' ) ); ?></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Confidence score', 'gdrive-folder-viewer' ); ?></th>
+						<td><?php echo esc_html( $confidence ); ?>%</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Would trigger alert email', 'gdrive-folder-viewer' ); ?></th>
+						<td>
+							<?php
+							printf(
+								/* translators: 1: yes/no, 2: confidence percentage threshold */
+								esc_html__( '%1$s, based on the current %2$d%% confidence threshold.', 'gdrive-folder-viewer' ),
+								esc_html( $would_alert ? __( 'Yes', 'gdrive-folder-viewer' ) : __( 'No', 'gdrive-folder-viewer' ) ),
+								(int) $threshold
+							);
+							?>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Triggering user', 'gdrive-folder-viewer' ); ?></th>
+						<td><?php echo esc_html( ! empty( $analysis['triggering_user'] ) ? $analysis['triggering_user'] : __( 'None reported', 'gdrive-folder-viewer' ) ); ?></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Reason', 'gdrive-folder-viewer' ); ?></th>
+						<td><?php echo esc_html( ! empty( $analysis['reason'] ) ? $analysis['reason'] : __( 'No reason returned.', 'gdrive-folder-viewer' ) ); ?></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Recommended action', 'gdrive-folder-viewer' ); ?></th>
+						<td><?php echo esc_html( ! empty( $analysis['recommended_action'] ) ? $analysis['recommended_action'] : __( 'No action returned.', 'gdrive-folder-viewer' ) ); ?></td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
 		<?php
 	}
 
@@ -541,12 +784,11 @@ class GDV_Admin {
 		echo '</tr></thead><tbody>';
 
 		foreach ( $rows as $row ) {
-			$timestamp = strtotime( $row->clicked_at );
 			echo '<tr>';
 			echo '<td>' . esc_html( $row->file_name ) . '</td>';
 			echo '<td><code>' . esc_html( $row->folder_id ) . '</code></td>';
 			echo '<td><code>' . esc_html( $row->ip_address ) . '</code></td>';
-			echo '<td>' . esc_html( $timestamp ? date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $timestamp ) : $row->clicked_at ) . '</td>';
+			echo '<td>' . esc_html( $this->format_click_datetime( $row->clicked_at ) ) . '</td>';
 			echo '</tr>';
 		}
 
@@ -583,6 +825,23 @@ class GDV_Admin {
 				$limit
 			)
 		);
+	}
+
+	/**
+	 * Formats stored click times using the WordPress timezone, including DST.
+	 *
+	 * @param string $mysql_datetime Stored datetime.
+	 * @return string
+	 */
+	private function format_click_datetime( $mysql_datetime ) {
+		$timezone = new DateTimeZone( 'Europe/London' );
+		$datetime = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $mysql_datetime, new DateTimeZone( 'UTC' ) );
+
+		if ( false === $datetime ) {
+			return $mysql_datetime;
+		}
+
+		return wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $datetime->getTimestamp(), $timezone );
 	}
 
 	/**

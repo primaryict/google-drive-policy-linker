@@ -452,6 +452,8 @@ if ( ! class_exists( 'Primary_ICT_Support_Admin_Menu' ) ) {
 				.picts-plugin-page input[type="text"],
 				.picts-plugin-page input[type="number"],
 				.picts-plugin-page input[type="search"],
+				.picts-plugin-page input[type="password"],
+				.picts-plugin-page input[type="date"],
 				.picts-plugin-page select {
 					border-color: var(--picts-border);
 				}
@@ -486,6 +488,50 @@ if ( ! class_exists( 'Primary_ICT_Support_Admin_Menu' ) ) {
 				.picts-plugin-page code {
 					background: rgba(0, 128, 155, 0.08);
 					color: var(--picts-navy);
+				}
+
+				.gdv-admin-graph-wrap,
+				.gdv-dashboard-widget {
+					max-width: 100%;
+					overflow-x: auto;
+				}
+
+				.gdv-click-graph {
+					display: block;
+					height: auto;
+					max-width: 100%;
+				}
+
+				.gdv-gemini-status {
+					border-left: 4px solid var(--picts-teal);
+					margin: 18px 0 8px;
+					padding: 12px 14px;
+				}
+
+				.gdv-gemini-status--ready {
+					background: rgba(0, 128, 155, 0.08);
+					color: var(--picts-teal);
+				}
+
+				.gdv-gemini-status--missing {
+					background: #fff8e5;
+					border-left-color: #dba617;
+					color: #7a5600;
+				}
+
+				.gdv-gemini-form {
+					margin-top: 12px;
+				}
+
+				.gdv-gemini-result {
+					background: var(--picts-soft);
+					border: 1px solid var(--picts-border);
+					margin-top: 24px;
+					padding: 18px;
+				}
+
+				.gdv-gemini-result h3 {
+					margin-top: 0;
 				}
 
 				@media (max-width: 900px) {

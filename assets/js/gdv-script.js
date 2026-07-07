@@ -75,7 +75,7 @@
 		request.send(body);
 	}
 
-	document.addEventListener('click', function (event) {
+	function handleTrackableEvent(event) {
 		var link = findPolicyLink(event.target);
 
 		if (!link) {
@@ -83,5 +83,17 @@
 		}
 
 		trackClick(link);
+	}
+
+	document.addEventListener('click', handleTrackableEvent);
+
+	document.addEventListener('auxclick', function (event) {
+		if (event.button === 1) {
+			handleTrackableEvent(event);
+		}
+	});
+
+	document.addEventListener('contextmenu', function (event) {
+		handleTrackableEvent(event);
 	});
 }());

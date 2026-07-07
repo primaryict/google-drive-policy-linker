@@ -151,7 +151,7 @@ class GDV_Shortcode {
 
 		echo '<li class="gdv-file-item">';
 
-		echo '<a href="' . esc_url( $link ) . '" target="_blank" rel="noopener noreferrer" class="gdv-policy-link gdv-file-type-' . esc_attr( $type['class'] ) . '" ';
+		echo '<a href="' . esc_url( $link ) . '" target="_blank" rel="nofollow noopener noreferrer" class="gdv-policy-link gdv-file-type-' . esc_attr( $type['class'] ) . '" ';
 		echo 'data-file-id="' . esc_attr( $id ) . '" data-file-name="' . esc_attr( $name ) . '" data-folder-id="' . esc_attr( $folder_id ) . '">';
 		echo '<span class="gdv-file-main">';
 		echo '<span class="gdv-file-icon" aria-hidden="true">' . esc_html( $type['label'] ) . '</span>';

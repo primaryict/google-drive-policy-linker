@@ -2,7 +2,7 @@
 Contributors: Primary ICT Support Ltd
 Requires at least: 5.8
 Requires PHP: 7.4
-Stable tag: 1.0.8
+Stable tag: 1.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,10 @@ Features include:
 * Threshold-based alert emails.
 * Primary ICT Support admin dashboard.
 * Click stats with IP address search.
+* Daily document click graph.
+* WordPress dashboard stats widget.
+* Optional Gemini AI analysis before threshold alerts are sent.
+* Manual Gemini AI date-range checks from the admin area.
 * WordPress plugin-screen updates from GitHub Releases.
 
 == Installation ==
@@ -40,6 +44,28 @@ Example:
 This plugin can store visitor IP addresses when users click listed documents. Site owners should mention this in their privacy policy where required.
 
 == Changelog ==
+
+= 1.2.2 =
+* Updated the default Gemini model and added a configurable Gemini model setting.
+
+= 1.2.1 =
+* Added a Gemini AI admin tab for manual date-range analysis without sending alert emails.
+
+= 1.2.0 =
+* Added optional Gemini AI click-pattern analysis with configurable confidence threshold.
+
+= 1.1.1 =
+* Fixed duplicate Y-axis labels on low-count click graphs.
+
+= 1.1.0 =
+* Added bot click filtering, nofollow policy links, daily click graphs, graph email content, and a WordPress dashboard widget.
+* Changed click timestamps to store UTC and display as UK local time.
+
+= 1.0.10 =
+* Improved click stats time handling for the WordPress site timezone and daylight saving time.
+
+= 1.0.9 =
+* Improved click tracking for middle-clicks and right-click context menu opens.
 
 = 1.0.8 =
 * Added Google Shared Drive support to folder document requests.

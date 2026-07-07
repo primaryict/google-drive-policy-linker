@@ -45,6 +45,9 @@ class GDV_Activator {
 		add_option( 'gdv_threshold_window_hours', 24 );
 		add_option( 'gdv_alert_cooldown_hours', 24 );
 		add_option( 'gdv_alert_emails', get_option( 'admin_email' ) );
+		add_option( 'gdv_gemini_api_key', '' );
+		add_option( 'gdv_gemini_model', GDV_Gemini_Analyzer::DEFAULT_MODEL );
+		add_option( 'gdv_gemini_confidence_threshold', 75 );
 		add_option( 'gdv_delete_data_on_uninstall', 0 );
 		add_option( 'gdv_known_folders', array() );
 		add_option( 'gdv_last_alert_sent', '' );
