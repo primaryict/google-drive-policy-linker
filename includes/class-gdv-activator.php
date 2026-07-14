@@ -19,6 +19,7 @@ class GDV_Activator {
 		global $wpdb;
 
 		$table_name      = $wpdb->prefix . GDV_TABLE_NAME;
+		$gemini_table    = $wpdb->prefix . GDV_GEMINI_TABLE_NAME;
 		$charset_collate = $wpdb->get_charset_collate();
 
 		$sql = "CREATE TABLE {$table_name} (
@@ -34,6 +35,30 @@ class GDV_Activator {
 			KEY clicked_at (clicked_at)
 		) {$charset_collate};";
 
+		$sql .= "\nCREATE TABLE {$gemini_table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			source varchar(30) NOT NULL DEFAULT '',
+			status varchar(30) NOT NULL DEFAULT '',
+			trigger_count int unsigned NOT NULL DEFAULT 0,
+			trigger_window_hours int unsigned NOT NULL DEFAULT 0,
+			data_window_days int unsigned NOT NULL DEFAULT 0,
+			date_range_start datetime DEFAULT NULL,
+			date_range_end datetime DEFAULT NULL,
+			model varchar(100) NOT NULL DEFAULT '',
+			inspection_likely tinyint(1) NOT NULL DEFAULT 0,
+			confidence_score int unsigned NOT NULL DEFAULT 0,
+			alert_sent tinyint(1) NOT NULL DEFAULT 0,
+			triggering_user varchar(100) NOT NULL DEFAULT '',
+			reason text NULL,
+			recommended_action text NULL,
+			error_message text NULL,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY source (source),
+			KEY status (status),
+			KEY created_at (created_at)
+		) {$charset_collate};";
+
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
 
@@ -47,6 +72,7 @@ class GDV_Activator {
 		add_option( 'gdv_alert_emails', get_option( 'admin_email' ) );
 		add_option( 'gdv_gemini_api_key', '' );
 		add_option( 'gdv_gemini_model', GDV_Gemini_Analyzer::DEFAULT_MODEL );
+		add_option( 'gdv_gemini_data_days', 14 );
 		add_option( 'gdv_gemini_confidence_threshold', 75 );
 		add_option( 'gdv_delete_data_on_uninstall', 0 );
 		add_option( 'gdv_known_folders', array() );

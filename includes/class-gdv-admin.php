@@ -52,10 +52,11 @@ class GDV_Admin {
 		register_setting( 'gdv_settings', 'gdv_threshold_window_hours', array( $this, 'sanitize_positive_int' ) );
 		register_setting( 'gdv_settings', 'gdv_alert_cooldown_hours', array( $this, 'sanitize_non_negative_int' ) );
 		register_setting( 'gdv_settings', 'gdv_alert_emails', array( $this, 'sanitize_email_list' ) );
-		register_setting( 'gdv_settings', 'gdv_gemini_api_key', array( $this, 'sanitize_text' ) );
-		register_setting( 'gdv_settings', 'gdv_gemini_model', array( $this, 'sanitize_gemini_model' ) );
-		register_setting( 'gdv_settings', 'gdv_gemini_confidence_threshold', array( $this, 'sanitize_percentage' ) );
 		register_setting( 'gdv_settings', 'gdv_delete_data_on_uninstall', array( $this, 'sanitize_checkbox' ) );
+		register_setting( 'gdv_gemini_settings', 'gdv_gemini_api_key', array( $this, 'sanitize_text' ) );
+		register_setting( 'gdv_gemini_settings', 'gdv_gemini_model', array( $this, 'sanitize_gemini_model' ) );
+		register_setting( 'gdv_gemini_settings', 'gdv_gemini_data_days', array( $this, 'sanitize_positive_int' ) );
+		register_setting( 'gdv_gemini_settings', 'gdv_gemini_confidence_threshold', array( $this, 'sanitize_percentage' ) );
 		register_setting( 'gdv_design_settings', 'gdv_design_bg_color', array( $this, 'sanitize_color' ) );
 		register_setting( 'gdv_design_settings', 'gdv_design_hover_bg_color', array( $this, 'sanitize_color' ) );
 		register_setting( 'gdv_design_settings', 'gdv_design_text_color', array( $this, 'sanitize_color' ) );
@@ -81,7 +82,7 @@ class GDV_Admin {
 		}
 
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'settings';
-		$tab = in_array( $tab, array( 'settings', 'design', 'stats', 'gemini' ), true ) ? $tab : 'settings';
+		$tab = in_array( $tab, array( 'settings', 'design', 'stats', 'gemini', 'gemini-logs' ), true ) ? $tab : 'settings';
 
 		echo '<div class="wrap picts-dashboard picts-plugin-page">';
 		echo '<div class="picts-plugin-page__hero">';
@@ -99,6 +100,8 @@ class GDV_Admin {
 			$this->render_stats_tab();
 		} elseif ( 'gemini' === $tab ) {
 			$this->render_gemini_tab();
+		} elseif ( 'gemini-logs' === $tab ) {
+			$this->render_gemini_logs_tab();
 		} elseif ( 'design' === $tab ) {
 			$this->render_design_tab();
 		} else {
@@ -139,7 +142,7 @@ class GDV_Admin {
 		$tracker      = new GDV_Click_Tracker();
 		$window_hours = max( 1, (int) get_option( 'gdv_threshold_window_hours', 24 ) );
 		$count        = $tracker->get_click_count( $window_hours );
-		$analysis     = $tracker->get_gemini_analysis_for_alert( $window_hours );
+		$analysis     = $tracker->get_gemini_analysis_for_alert( $window_hours, 'test', $count );
 		$sent         = $tracker->send_alert_email( $count, $window_hours, true, $analysis );
 
 		$this->redirect_with_notice( $sent ? 'test_sent' : 'test_failed' );
@@ -322,12 +325,14 @@ class GDV_Admin {
 		$design_url   = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=design' );
 		$stats_url    = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=stats' );
 		$gemini_url   = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=gemini' );
+		$logs_url     = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=gemini-logs' );
 
 		echo '<h2 class="nav-tab-wrapper">';
 		echo '<a class="nav-tab ' . esc_attr( 'settings' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $settings_url ) . '">' . esc_html__( 'Settings', 'gdrive-folder-viewer' ) . '</a>';
 		echo '<a class="nav-tab ' . esc_attr( 'design' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $design_url ) . '">' . esc_html__( 'Design', 'gdrive-folder-viewer' ) . '</a>';
 		echo '<a class="nav-tab ' . esc_attr( 'stats' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $stats_url ) . '">' . esc_html__( 'Click Stats', 'gdrive-folder-viewer' ) . '</a>';
 		echo '<a class="nav-tab ' . esc_attr( 'gemini' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $gemini_url ) . '">' . esc_html__( 'Gemini AI', 'gdrive-folder-viewer' ) . '</a>';
+		echo '<a class="nav-tab ' . esc_attr( 'gemini-logs' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $logs_url ) . '">' . esc_html__( 'Gemini Logs', 'gdrive-folder-viewer' ) . '</a>';
 		echo '</h2>';
 	}
 
@@ -591,12 +596,42 @@ class GDV_Admin {
 
 			if ( '' === $start_date || '' === $end_date ) {
 				$analysis_error = new WP_Error( 'gdv_gemini_invalid_admin_dates', __( 'Please choose a valid start and end date.', 'gdrive-folder-viewer' ) );
+				GDV_Gemini_Log::insert(
+					array(
+						'source'        => 'manual',
+						'status'        => 'error',
+						'model'         => $analyzer->get_model(),
+						'error_message' => $analysis_error->get_error_message(),
+					)
+				);
 			} else {
 				$analysis = $analyzer->analyze_date_range( $start_date, $end_date );
 
 				if ( is_wp_error( $analysis ) ) {
 					$analysis_error = $analysis;
 					$analysis       = null;
+					GDV_Gemini_Log::insert(
+						array(
+							'source'           => 'manual',
+							'status'           => 'error',
+							'date_range_start' => $start_date . ' 00:00:00',
+							'date_range_end'   => $end_date . ' 23:59:59',
+							'model'            => $analyzer->get_model(),
+							'error_message'    => $analysis_error->get_error_message(),
+						)
+					);
+				} else {
+					GDV_Gemini_Log::insert(
+						array(
+							'source'           => 'manual',
+							'status'           => 'complete',
+							'date_range_start' => $start_date . ' 00:00:00',
+							'date_range_end'   => $end_date . ' 23:59:59',
+							'model'            => $analyzer->get_model(),
+							'alert_sent'       => 0,
+							'analysis'         => $analysis,
+						)
+					);
 				}
 			}
 		}
@@ -620,7 +655,7 @@ class GDV_Admin {
 		</div>
 
 		<form method="post" action="<?php echo esc_url( admin_url( 'options.php' ) ); ?>" class="gdv-gemini-settings-form">
-			<?php settings_fields( 'gdv_settings' ); ?>
+			<?php settings_fields( 'gdv_gemini_settings' ); ?>
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><label for="gdv_gemini_api_key"><?php esc_html_e( 'Gemini API key', 'gdrive-folder-viewer' ); ?></label></th>
@@ -641,6 +676,13 @@ class GDV_Admin {
 					<td>
 						<input name="gdv_gemini_confidence_threshold" id="gdv_gemini_confidence_threshold" type="number" min="0" max="100" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_confidence_threshold', 75 ) ); ?>"> %
 						<p class="description"><?php esc_html_e( 'After the click count triggers a review, the alert email is only sent when the review marks the activity as likely and meets this confidence score.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="gdv_gemini_data_days"><?php esc_html_e( 'Review data window', 'gdrive-folder-viewer' ); ?></label></th>
+					<td>
+						<input name="gdv_gemini_data_days" id="gdv_gemini_data_days" type="number" min="1" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_data_days', 14 ) ); ?>"> <?php esc_html_e( 'days', 'gdrive-folder-viewer' ); ?>
+						<p class="description"><?php esc_html_e( 'How many days of anonymised click data are sent for the automatic threshold review and test alert email. The manual check below still uses the dates you choose.', 'gdrive-folder-viewer' ); ?></p>
 					</td>
 				</tr>
 			</table>
@@ -728,6 +770,173 @@ class GDV_Admin {
 			</table>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Renders stored Gemini review history.
+	 *
+	 * @return void
+	 */
+	private function render_gemini_logs_tab() {
+		$this->render_admin_notice();
+		$logs = GDV_Gemini_Log::get_recent( 50 );
+		?>
+		<h2><?php esc_html_e( 'Gemini Review Logs', 'gdrive-folder-viewer' ); ?></h2>
+		<p><?php esc_html_e( 'Review logs show when Gemini was asked to assess click activity, what triggered the review, and whether the result would send an alert.', 'gdrive-folder-viewer' ); ?></p>
+
+		<?php if ( empty( $logs ) ) : ?>
+			<p><?php esc_html_e( 'No Gemini review logs have been recorded yet.', 'gdrive-folder-viewer' ); ?></p>
+			<?php return; ?>
+		<?php endif; ?>
+
+		<table class="widefat striped">
+			<thead>
+				<tr>
+					<th><?php esc_html_e( 'Date', 'gdrive-folder-viewer' ); ?></th>
+					<th><?php esc_html_e( 'Source', 'gdrive-folder-viewer' ); ?></th>
+					<th><?php esc_html_e( 'Status', 'gdrive-folder-viewer' ); ?></th>
+					<th><?php esc_html_e( 'Trigger', 'gdrive-folder-viewer' ); ?></th>
+					<th><?php esc_html_e( 'Result', 'gdrive-folder-viewer' ); ?></th>
+					<th><?php esc_html_e( 'Reason', 'gdrive-folder-viewer' ); ?></th>
+					<th><?php esc_html_e( 'Alert', 'gdrive-folder-viewer' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $logs as $log ) : ?>
+					<tr>
+						<td>
+							<?php echo esc_html( $this->format_click_datetime( $log->created_at ) ); ?><br>
+							<span class="description"><?php echo esc_html( $log->model ); ?></span>
+						</td>
+						<td><?php echo esc_html( $this->get_gemini_log_source_label( $log->source ) ); ?></td>
+						<td><?php echo esc_html( $this->get_gemini_log_status_label( $log->status ) ); ?></td>
+						<td>
+							<?php echo esc_html( $this->get_gemini_log_window_label( $log ) ); ?>
+						</td>
+						<td>
+							<?php if ( 'complete' === $log->status ) : ?>
+								<?php echo esc_html( ! empty( $log->inspection_likely ) ? __( 'Likely', 'gdrive-folder-viewer' ) : __( 'Not likely', 'gdrive-folder-viewer' ) ); ?><br>
+								<span class="description">
+									<?php
+									printf(
+										/* translators: %d: confidence score */
+										esc_html__( '%d%% confidence', 'gdrive-folder-viewer' ),
+										(int) $log->confidence_score
+									);
+									?>
+								</span>
+							<?php else : ?>
+								<?php echo esc_html( $log->error_message ); ?>
+							<?php endif; ?>
+						</td>
+						<td>
+							<?php if ( ! empty( $log->reason ) ) : ?>
+								<?php echo esc_html( $log->reason ); ?>
+								<?php if ( ! empty( $log->recommended_action ) ) : ?>
+									<br><span class="description"><?php echo esc_html( $log->recommended_action ); ?></span>
+								<?php endif; ?>
+							<?php else : ?>
+								<span class="description"><?php esc_html_e( 'No response text recorded.', 'gdrive-folder-viewer' ); ?></span>
+							<?php endif; ?>
+						</td>
+						<td><?php echo esc_html( ! empty( $log->alert_sent ) ? __( 'Sent', 'gdrive-folder-viewer' ) : __( 'Not sent', 'gdrive-folder-viewer' ) ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+		<?php
+	}
+
+	/**
+	 * Returns a friendly Gemini log source label.
+	 *
+	 * @param string $source Source key.
+	 * @return string
+	 */
+	private function get_gemini_log_source_label( $source ) {
+		switch ( $source ) {
+			case 'automatic':
+				return __( 'Threshold', 'gdrive-folder-viewer' );
+			case 'test':
+				return __( 'Test email', 'gdrive-folder-viewer' );
+			case 'manual':
+				return __( 'Manual check', 'gdrive-folder-viewer' );
+			default:
+				return ucfirst( (string) $source );
+		}
+	}
+
+	/**
+	 * Returns a friendly Gemini log status label.
+	 *
+	 * @param string $status Status key.
+	 * @return string
+	 */
+	private function get_gemini_log_status_label( $status ) {
+		switch ( $status ) {
+			case 'complete':
+				return __( 'Complete', 'gdrive-folder-viewer' );
+			case 'error':
+				return __( 'Error', 'gdrive-folder-viewer' );
+			case 'skipped':
+				return __( 'Skipped', 'gdrive-folder-viewer' );
+			default:
+				return ucfirst( (string) $status );
+		}
+	}
+
+	/**
+	 * Returns a short description of the data window used for a log.
+	 *
+	 * @param object $log Log row.
+	 * @return string
+	 */
+	private function get_gemini_log_window_label( $log ) {
+		if ( ! empty( $log->date_range_start ) && ! empty( $log->date_range_end ) ) {
+			return sprintf(
+				/* translators: 1: start date, 2: end date */
+				__( '%1$s to %2$s', 'gdrive-folder-viewer' ),
+				$this->format_gemini_log_date( $log->date_range_start ),
+				$this->format_gemini_log_date( $log->date_range_end )
+			);
+		}
+
+		$parts = array();
+
+		if ( ! empty( $log->data_window_days ) ) {
+			$parts[] = sprintf(
+				/* translators: %d: number of days */
+				_n( '%d day reviewed', '%d days reviewed', (int) $log->data_window_days, 'gdrive-folder-viewer' ),
+				(int) $log->data_window_days
+			);
+		}
+
+		if ( ! empty( $log->trigger_count ) && ! empty( $log->trigger_window_hours ) ) {
+			$parts[] = sprintf(
+				/* translators: 1: click count, 2: hour window */
+				__( '%1$d clicks in %2$d hours', 'gdrive-folder-viewer' ),
+				(int) $log->trigger_count,
+				(int) $log->trigger_window_hours
+			);
+		}
+
+		return ! empty( $parts ) ? implode( '; ', $parts ) : __( 'Not recorded', 'gdrive-folder-viewer' );
+	}
+
+	/**
+	 * Formats a stored log date without applying UTC conversion.
+	 *
+	 * @param string $mysql_datetime Stored datetime.
+	 * @return string
+	 */
+	private function format_gemini_log_date( $mysql_datetime ) {
+		$timestamp = strtotime( $mysql_datetime );
+
+		if ( ! $timestamp ) {
+			return $mysql_datetime;
+		}
+
+		return date_i18n( get_option( 'date_format' ), $timestamp );
 	}
 
 	/**

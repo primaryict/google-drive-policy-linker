@@ -4,7 +4,7 @@
  * Plugin Name:       Google Drive Folder Viewer & Policy Click Tracker
  * Plugin URI:        https://primaryictsupport.co.uk/
  * Description:       Display Google Drive policy folders with styled file links, click tracking, alerts, IP logs, and simple admin reporting.
- * Version:           1.2.4
+ * Version:           1.2.6
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Primary ICT Support Ltd
@@ -20,11 +20,12 @@ if (! defined('ABSPATH')) {
 	exit;
 }
 
-define('GDV_VERSION', '1.2.4');
+define('GDV_VERSION', '1.2.6');
 define('GDV_PLUGIN_FILE', __FILE__);
 define('GDV_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('GDV_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('GDV_TABLE_NAME', 'gdv_clicks');
+define('GDV_GEMINI_TABLE_NAME', 'gdv_gemini_logs');
 define('GDV_PRIMARY_ICT_ICON_URL', GDV_PLUGIN_URL . 'assets/images/primary-ict-support-icon.png');
 define('GDV_PRIMARY_ICT_LOGO_URL', GDV_PLUGIN_URL . 'assets/images/primary-ict-support-logo.svg');
 
@@ -36,6 +37,7 @@ require_once GDV_PLUGIN_DIR . 'includes/class-gdv-drive-api.php';
 require_once GDV_PLUGIN_DIR . 'includes/class-gdv-shortcode.php';
 require_once GDV_PLUGIN_DIR . 'includes/class-gdv-click-tracker.php';
 require_once GDV_PLUGIN_DIR . 'includes/class-gdv-gemini-analyzer.php';
+require_once GDV_PLUGIN_DIR . 'includes/class-gdv-gemini-log.php';
 require_once GDV_PLUGIN_DIR . 'includes/class-gdv-admin.php';
 require_once GDV_PLUGIN_DIR . 'includes/class-gdv-github-updater.php';
 

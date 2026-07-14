@@ -88,7 +88,7 @@ class GDV_Click_Tracker {
 			}
 		}
 
-		$analysis = $this->get_gemini_analysis_for_alert( $window_hours );
+		$analysis = $this->get_gemini_analysis_for_alert( $window_hours, 'automatic', $count );
 
 		if ( is_array( $analysis ) && empty( $analysis['send_alert'] ) ) {
 			update_option( 'gdv_last_alert_sent', $this->get_current_datetime() );
@@ -289,6 +289,198 @@ class GDV_Click_Tracker {
 	}
 
 	/**
+	 * Creates a PNG graph in uploads and returns its public URL for email use.
+	 *
+	 * @param int $days   Number of days to include.
+	 * @param int $limit  Maximum documents to chart.
+	 * @param int $width  Image width.
+	 * @param int $height Image height.
+	 * @return string
+	 */
+	public function get_click_graph_image_url( $days = 14, $limit = 6, $width = 900, $height = 360 ) {
+		if ( ! function_exists( 'imagecreatetruecolor' ) || ! function_exists( 'imagepng' ) ) {
+			return '';
+		}
+
+		$upload = wp_upload_dir();
+		if ( ! empty( $upload['error'] ) ) {
+			return '';
+		}
+
+		$dir = trailingslashit( $upload['basedir'] ) . 'gdv-email-graphs';
+		$url = trailingslashit( $upload['baseurl'] ) . 'gdv-email-graphs';
+
+		if ( ! wp_mkdir_p( $dir ) ) {
+			return '';
+		}
+
+		$this->cleanup_old_graph_images( $dir );
+
+		$file_name = 'policy-clicks-' . time() . '-' . wp_generate_password( 8, false, false ) . '.png';
+		$file_path = trailingslashit( $dir ) . $file_name;
+		$image     = $this->create_click_graph_png_resource( $days, $limit, $width, $height );
+
+		if ( ! $image ) {
+			return '';
+		}
+
+		$saved = imagepng( $image, $file_path );
+		imagedestroy( $image );
+
+		if ( ! $saved ) {
+			return '';
+		}
+
+		return trailingslashit( $url ) . $file_name;
+	}
+
+	/**
+	 * Draws the click graph as a PNG image resource.
+	 *
+	 * @param int $days   Number of days to include.
+	 * @param int $limit  Maximum documents to chart.
+	 * @param int $width  Image width.
+	 * @param int $height Image height.
+	 * @return resource|GdImage|false
+	 */
+	private function create_click_graph_png_resource( $days, $limit, $width, $height ) {
+		$data   = $this->get_daily_file_click_series( $days, $limit );
+		$labels = $data['labels'];
+		$series = $data['series'];
+		$image  = imagecreatetruecolor( $width, $height );
+
+		if ( ! $image ) {
+			return false;
+		}
+
+		$white  = imagecolorallocate( $image, 255, 255, 255 );
+		$navy   = imagecolorallocate( $image, 25, 50, 85 );
+		$muted  = imagecolorallocate( $image, 82, 101, 121 );
+		$border = imagecolorallocate( $image, 217, 226, 236 );
+		$grid   = imagecolorallocate( $image, 238, 242, 247 );
+		$colors = array(
+			imagecolorallocate( $image, 0, 128, 155 ),
+			imagecolorallocate( $image, 225, 7, 19 ),
+			imagecolorallocate( $image, 25, 50, 85 ),
+			imagecolorallocate( $image, 124, 58, 237 ),
+			imagecolorallocate( $image, 21, 128, 61 ),
+			imagecolorallocate( $image, 194, 65, 12 ),
+		);
+
+		imagefill( $image, 0, 0, $white );
+
+		$max = 1;
+		foreach ( $series as $line ) {
+			$max = max( $max, max( $line['counts'] ) );
+		}
+
+		$tick_count  = 4;
+		$tick_step   = max( 1, (int) ceil( $max / $tick_count ) );
+		$axis_max    = $tick_step * $tick_count;
+		$left        = 50;
+		$top         = 28;
+		$right       = 24;
+		$bottom      = 82;
+		$plot_width  = $width - $left - $right;
+		$plot_height = $height - $top - $bottom;
+		$label_count = max( 1, count( $labels ) - 1 );
+
+		imageline( $image, $left, $top + $plot_height, $left + $plot_width, $top + $plot_height, $border );
+		imageline( $image, $left, $top, $left, $top + $plot_height, $border );
+
+		for ( $i = 0; $i <= $tick_count; $i++ ) {
+			$value = $tick_step * $i;
+			$y     = (int) round( $top + $plot_height - ( $plot_height * $i / $tick_count ) );
+			imageline( $image, $left, $y, $left + $plot_width, $y, $grid );
+			imagestring( $image, 2, 8, $y - 7, (string) $value, $muted );
+		}
+
+		foreach ( $labels as $i => $label ) {
+			if ( 0 !== $i && $i !== count( $labels ) - 1 && 0 !== $i % max( 1, (int) ceil( count( $labels ) / 7 ) ) ) {
+				continue;
+			}
+
+			$x = (int) round( $left + ( $plot_width * $i / $label_count ) );
+			imagestring( $image, 2, max( 0, $x - 14 ), $top + $plot_height + 12, $label, $muted );
+		}
+
+		foreach ( $series as $index => $line ) {
+			$points = array();
+			foreach ( $line['counts'] as $i => $count ) {
+				$points[] = array(
+					'x' => (int) round( $left + ( $plot_width * $i / $label_count ) ),
+					'y' => (int) round( $top + $plot_height - ( $plot_height * (int) $count / $axis_max ) ),
+				);
+			}
+
+			$color = $colors[ $index % count( $colors ) ];
+			for ( $i = 1; $i < count( $points ); $i++ ) {
+				$this->draw_thick_line( $image, $points[ $i - 1 ]['x'], $points[ $i - 1 ]['y'], $points[ $i ]['x'], $points[ $i ]['y'], $color, 3 );
+			}
+
+			foreach ( $points as $point ) {
+				imagefilledellipse( $image, $point['x'], $point['y'], 7, 7, $color );
+			}
+		}
+
+		if ( empty( $series ) ) {
+			imagestring( $image, 4, (int) ( $width / 2 - 65 ), (int) ( $height / 2 ), 'No click data yet', $muted );
+		}
+
+		$legend_y = $height - 42;
+		foreach ( $series as $index => $line ) {
+			$x     = $left + ( $index % 2 ) * 420;
+			$y     = $legend_y + ( 18 * floor( $index / 2 ) );
+			$label = strlen( $line['name'] ) > 46 ? substr( $line['name'], 0, 43 ) . '...' : $line['name'];
+			imagefilledrectangle( $image, $x, $y - 10, $x + 10, $y, $colors[ $index % count( $colors ) ] );
+			imagestring( $image, 2, $x + 16, $y - 12, $label, $navy );
+		}
+
+		return $image;
+	}
+
+	/**
+	 * Draws a thicker anti-simple line for the PNG graph.
+	 *
+	 * @param resource|GdImage $image Image resource.
+	 * @param int              $x1    Start x.
+	 * @param int              $y1    Start y.
+	 * @param int              $x2    End x.
+	 * @param int              $y2    End y.
+	 * @param int              $color GD colour.
+	 * @param int              $width Line width.
+	 * @return void
+	 */
+	private function draw_thick_line( $image, $x1, $y1, $x2, $y2, $color, $width ) {
+		for ( $offset = -floor( $width / 2 ); $offset <= floor( $width / 2 ); $offset++ ) {
+			imageline( $image, $x1, $y1 + $offset, $x2, $y2 + $offset, $color );
+			imageline( $image, $x1 + $offset, $y1, $x2 + $offset, $y2, $color );
+		}
+	}
+
+	/**
+	 * Deletes old generated email graph images.
+	 *
+	 * @param string $dir Directory path.
+	 * @return void
+	 */
+	private function cleanup_old_graph_images( $dir ) {
+		$files = glob( trailingslashit( $dir ) . 'policy-clicks-*.png' );
+
+		if ( empty( $files ) ) {
+			return;
+		}
+
+		$cutoff = time() - ( 14 * DAY_IN_SECONDS );
+
+		foreach ( $files as $file ) {
+			if ( is_file( $file ) && filemtime( $file ) < $cutoff ) {
+				wp_delete_file( $file );
+			}
+		}
+	}
+
+	/**
 	 * Sends the threshold-exceeded alert email to the configured recipients.
 	 *
 	 * @param int  $count        Number of clicks in the window.
@@ -305,21 +497,13 @@ class GDV_Click_Tracker {
 			? sprintf( '[%s] TEST: policy document activity alert', $site_name )
 			: sprintf( '[%s] Unusual policy document activity detected', $site_name );
 
-		$graph_svg = $this->get_click_graph_svg( 14, 6, 900, 360 );
-		$body      = $this->get_alert_email_body( $site_name, $count, $window_hours, $top_files, $graph_svg, $is_test, $analysis );
+		$graph_url = $this->get_click_graph_image_url( 14, 6, 900, 360 );
+		$body      = $this->get_alert_email_body( $site_name, $count, $window_hours, $top_files, $graph_url, $is_test, $analysis );
 
 		$recipients = $this->get_recipient_emails();
 		$headers = array( 'Content-Type: text/html; charset=UTF-8' );
-		$attachment = $this->create_graph_attachment( $graph_svg );
-		$attachments = $attachment ? array( $attachment ) : array();
 
-		$sent = wp_mail( $recipients, $subject, $body, $headers, $attachments );
-
-		if ( $attachment ) {
-			wp_delete_file( $attachment );
-		}
-
-		return $sent;
+		return wp_mail( $recipients, $subject, $body, $headers );
 	}
 
 	/**
@@ -329,12 +513,12 @@ class GDV_Click_Tracker {
 	 * @param int    $count        Number of clicks in the window.
 	 * @param int    $window_hours The lookback window, in hours.
 	 * @param array  $top_files    Most-clicked files.
-	 * @param string $graph_svg    Inline SVG graph markup.
+	 * @param string $graph_url    Graph image URL.
 	 * @param bool   $is_test      Whether this is a test email.
 	 * @param array  $analysis     Optional analysis result wrapper.
 	 * @return string
 	 */
-	private function get_alert_email_body( $site_name, $count, $window_hours, $top_files, $graph_svg, $is_test, $analysis ) {
+	private function get_alert_email_body( $site_name, $count, $window_hours, $top_files, $graph_url, $is_test, $analysis ) {
 		$stats_url          = admin_url( 'admin.php?page=gdv-settings&tab=stats' );
 		$assessment_summary = $this->get_alert_assessment_summary( $analysis );
 		$test_banner        = $is_test ? '<div style="background:#fff8e5;border-left:4px solid #dba617;color:#7a5600;margin:0 0 18px;padding:12px 14px;"><strong>Test alert:</strong> This email was triggered manually, using the same recent click data and review process as a natural threshold alert.</div>' : '';
@@ -354,7 +538,11 @@ class GDV_Click_Tracker {
 		$body .= '<h2 style="color:#193255;font-size:18px;margin:22px 0 10px;">Most viewed documents</h2>';
 		$body .= $this->get_top_files_email_table( $top_files );
 		$body .= '<h2 style="color:#193255;font-size:18px;margin:24px 0 10px;">Recent policy click activity</h2>';
-		$body .= '<div style="border:1px solid #d9e2ec;margin:0 0 18px;overflow-x:auto;padding:8px;">' . $graph_svg . '</div>';
+		if ( '' !== $graph_url ) {
+			$body .= '<div style="border:1px solid #d9e2ec;margin:0 0 18px;padding:8px;"><img src="' . esc_url( $graph_url ) . '" alt="Recent policy click activity graph" style="display:block;height:auto;max-width:100%;width:100%;"></div>';
+		} else {
+			$body .= '<p style="background:#f3f7fb;border:1px solid #d9e2ec;color:#526579;font-size:14px;margin:0 0 18px;padding:12px;">The activity graph could not be generated on this site.</p>';
+		}
 		$body .= '<p style="color:#526579;font-size:14px;line-height:1.6;margin:0 0 18px;">A sudden spike in policy document views can sometimes precede an Ofsted visit or inspection, as parents, staff or inspectors may review policies beforehand. It would be sensible to review the recent activity and check that published policies are up to date.</p>';
 		$body .= '<p style="margin:0;"><a href="' . esc_url( $stats_url ) . '" style="background:#00809b;color:#ffffff;display:inline-block;font-weight:700;padding:10px 16px;text-decoration:none;">View detailed stats</a></p>';
 		$body .= '</div>';
@@ -375,12 +563,14 @@ class GDV_Click_Tracker {
 			$result     = $analysis['analysis'];
 			$confidence = isset( $result['confidence_score'] ) ? (int) $result['confidence_score'] : 0;
 			$threshold  = max( 0, min( 100, (int) get_option( 'gdv_gemini_confidence_threshold', 75 ) ) );
+			$data_days  = ! empty( $analysis['data_days'] ) ? max( 1, (int) $analysis['data_days'] ) : max( 1, (int) get_option( 'gdv_gemini_data_days', 14 ) );
 			$reason     = ! empty( $result['reason'] ) ? $result['reason'] : __( 'the recent pattern is unusual enough to warrant a closer look', 'gdrive-folder-viewer' );
 			$action     = ! empty( $result['recommended_action'] ) ? $result['recommended_action'] : __( 'Please review the latest click activity when convenient.', 'gdrive-folder-viewer' );
 
 			if ( empty( $result['inspection_likely'] ) || $confidence < $threshold ) {
 				return sprintf(
-					'The activity pattern was reviewed and does not currently meet the configured alert confidence threshold. The review confidence was %1$d%% against a %2$d%% threshold: %3$s. %4$s',
+					'The last %1$d day(s) of activity were reviewed and do not currently meet the configured alert confidence threshold. The review confidence was %2$d%% against a %3$d%% threshold: %4$s. %5$s',
+					$data_days,
 					$confidence,
 					$threshold,
 					$reason,
@@ -389,7 +579,8 @@ class GDV_Click_Tracker {
 			}
 
 			return sprintf(
-				'The activity pattern was reviewed and is considered worth attention with %1$d%% confidence: %2$s. %3$s',
+				'The last %1$d day(s) of activity were reviewed and the pattern is considered worth attention with %2$d%% confidence: %3$s. %4$s',
+				$data_days,
 				$confidence,
 				$reason,
 				$action
@@ -455,30 +646,73 @@ class GDV_Click_Tracker {
 	/**
 	 * Runs Gemini analysis when configured and decides whether to send alert.
 	 *
-	 * @param int $window_hours Lookback window.
+	 * @param int $window_hours Trigger lookback window.
 	 * @return array
 	 */
-	public function get_gemini_analysis_for_alert( $window_hours ) {
+	public function get_gemini_analysis_for_alert( $window_hours, $source = 'automatic', $trigger_count = 0 ) {
 		$analyzer = new GDV_Gemini_Analyzer();
+		$data_days = max( 1, (int) get_option( 'gdv_gemini_data_days', 14 ) );
 
 		if ( ! $analyzer->is_configured() ) {
+			GDV_Gemini_Log::insert(
+				array(
+					'source'               => $source,
+					'status'               => 'skipped',
+					'trigger_count'        => $trigger_count,
+					'trigger_window_hours' => $window_hours,
+					'data_window_days'     => $data_days,
+					'model'                => $analyzer->get_model(),
+					'alert_sent'           => true,
+					'error_message'        => __( 'Gemini API key is not configured.', 'gdrive-folder-viewer' ),
+				)
+			);
+
 			return array(
 				'send_alert' => true,
 			);
 		}
 
-		$analysis = $analyzer->analyze_recent_activity( $window_hours );
+		$analysis = $analyzer->analyze_recent_days( $data_days );
 
 		if ( is_wp_error( $analysis ) ) {
+			GDV_Gemini_Log::insert(
+				array(
+					'source'               => $source,
+					'status'               => 'error',
+					'trigger_count'        => $trigger_count,
+					'trigger_window_hours' => $window_hours,
+					'data_window_days'     => $data_days,
+					'model'                => $analyzer->get_model(),
+					'alert_sent'           => true,
+					'error_message'        => $analysis->get_error_message(),
+				)
+			);
+
 			return array(
 				'send_alert' => true,
 				'error'      => $analysis->get_error_message(),
 			);
 		}
 
+		$send_alert = $analyzer->should_send_alert( $analysis );
+
+		GDV_Gemini_Log::insert(
+			array(
+				'source'               => $source,
+				'status'               => 'complete',
+				'trigger_count'        => $trigger_count,
+				'trigger_window_hours' => $window_hours,
+				'data_window_days'     => $data_days,
+				'model'                => $analyzer->get_model(),
+				'alert_sent'           => $send_alert || 'test' === $source,
+				'analysis'             => $analysis,
+			)
+		);
+
 		return array(
-			'send_alert' => $analyzer->should_send_alert( $analysis ),
+			'send_alert' => $send_alert,
 			'analysis'   => $analysis,
+			'data_days'  => $data_days,
 		);
 	}
 
@@ -606,31 +840,6 @@ class GDV_Click_Tracker {
 	 */
 	private function get_display_timezone() {
 		return new DateTimeZone( 'Europe/London' );
-	}
-
-	/**
-	 * Creates a temporary SVG graph attachment for alert emails.
-	 *
-	 * @param string $svg SVG markup.
-	 * @return string
-	 */
-	private function create_graph_attachment( $svg ) {
-		$file = wp_tempnam( 'gdv-click-graph.svg' );
-
-		if ( ! $file ) {
-			return '';
-		}
-
-		$svg_file = $file . '.svg';
-
-		if ( false === file_put_contents( $svg_file, $svg ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-			wp_delete_file( $file );
-			return '';
-		}
-
-		wp_delete_file( $file );
-
-		return $svg_file;
 	}
 
 	/**

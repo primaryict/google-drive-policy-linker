@@ -2,7 +2,7 @@
 Contributors: Primary ICT Support Ltd
 Requires at least: 5.8
 Requires PHP: 7.4
-Stable tag: 1.2.4
+Stable tag: 1.2.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,6 +25,7 @@ Features include:
 * WordPress dashboard stats widget.
 * Optional Gemini AI analysis before threshold alerts are sent.
 * Manual Gemini AI date-range checks from the admin area.
+* Gemini review history logs.
 * WordPress plugin-screen updates from GitHub Releases.
 
 == Installation ==
@@ -44,6 +45,13 @@ Example:
 This plugin can store visitor IP addresses when users click listed documents. Site owners should mention this in their privacy policy where required.
 
 == Changelog ==
+
+= 1.2.6 =
+* Added a Gemini Logs tab with stored review outcomes for threshold, test, and manual checks.
+
+= 1.2.5 =
+* Switched alert email graphs from inline SVG to generated PNG images.
+* Added a separate Gemini review data window setting, defaulting to 14 days.
 
 = 1.2.4 =
 * Updated test alert emails to run the real Gemini review against current click data.

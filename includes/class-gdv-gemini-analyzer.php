@@ -41,6 +41,26 @@ class GDV_Gemini_Analyzer {
 	}
 
 	/**
+	 * Analyzes recent click activity over a whole-day lookback.
+	 *
+	 * @param int $days Lookback window in days.
+	 * @return array|WP_Error
+	 */
+	public function analyze_recent_days( $days ) {
+		$days      = max( 1, (int) $days );
+		$end_utc   = gmdate( 'Y-m-d H:i:s' );
+		$start_utc = gmdate( 'Y-m-d H:i:s', time() - ( $days * DAY_IN_SECONDS ) );
+
+		return $this->analyze_activity_between(
+			$start_utc,
+			$end_utc,
+			array(
+				'window_days' => $days,
+			)
+		);
+	}
+
+	/**
 	 * Analyzes click activity for a selected local date range.
 	 *
 	 * @param string $start_date Start date in Y-m-d format.
