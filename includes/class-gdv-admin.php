@@ -56,6 +56,7 @@ class GDV_Admin {
 		register_setting( 'gdv_gemini_settings', 'gdv_gemini_api_key', array( $this, 'sanitize_text' ) );
 		register_setting( 'gdv_gemini_settings', 'gdv_gemini_model', array( $this, 'sanitize_gemini_model' ) );
 		register_setting( 'gdv_gemini_settings', 'gdv_gemini_data_days', array( $this, 'sanitize_positive_int' ) );
+		register_setting( 'gdv_gemini_settings', 'gdv_gemini_timeout', array( $this, 'sanitize_gemini_timeout' ) );
 		register_setting( 'gdv_gemini_settings', 'gdv_gemini_confidence_threshold', array( $this, 'sanitize_percentage' ) );
 		register_setting( 'gdv_design_settings', 'gdv_design_bg_color', array( $this, 'sanitize_color' ) );
 		register_setting( 'gdv_design_settings', 'gdv_design_hover_bg_color', array( $this, 'sanitize_color' ) );
@@ -274,6 +275,16 @@ class GDV_Admin {
 		}
 
 		return '' !== $model ? $model : GDV_Gemini_Analyzer::DEFAULT_MODEL;
+	}
+
+	/**
+	 * Sanitizes the Gemini HTTP timeout.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return int
+	 */
+	public function sanitize_gemini_timeout( $value ) {
+		return max( 10, min( 120, absint( $value ) ) );
 	}
 
 	/**
@@ -683,6 +694,13 @@ class GDV_Admin {
 					<td>
 						<input name="gdv_gemini_data_days" id="gdv_gemini_data_days" type="number" min="1" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_data_days', 14 ) ); ?>"> <?php esc_html_e( 'days', 'gdrive-folder-viewer' ); ?>
 						<p class="description"><?php esc_html_e( 'How many days of anonymised click data are sent for the automatic threshold review and test alert email. The manual check below still uses the dates you choose.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="gdv_gemini_timeout"><?php esc_html_e( 'Request timeout', 'gdrive-folder-viewer' ); ?></label></th>
+					<td>
+						<input name="gdv_gemini_timeout" id="gdv_gemini_timeout" type="number" min="10" max="120" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_gemini_timeout', 60 ) ); ?>"> <?php esc_html_e( 'seconds', 'gdrive-folder-viewer' ); ?>
+						<p class="description"><?php esc_html_e( 'How long WordPress should wait for Gemini to respond. Increase this on slower live sites, or reduce the review data window if requests still time out.', 'gdrive-folder-viewer' ); ?></p>
 					</td>
 				</tr>
 			</table>

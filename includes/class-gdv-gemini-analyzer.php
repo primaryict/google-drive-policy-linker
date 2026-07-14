@@ -119,7 +119,7 @@ class GDV_Gemini_Analyzer {
 		$response = wp_remote_post(
 			$this->get_endpoint( $api_key ),
 			array(
-				'timeout' => 20,
+				'timeout' => $this->get_request_timeout(),
 				'headers' => array(
 					'Content-Type' => 'application/json',
 				),
@@ -308,5 +308,14 @@ class GDV_Gemini_Analyzer {
 	 */
 	private function get_api_key() {
 		return trim( (string) get_option( 'gdv_gemini_api_key', '' ) );
+	}
+
+	/**
+	 * Returns the configured Gemini request timeout.
+	 *
+	 * @return int
+	 */
+	private function get_request_timeout() {
+		return max( 10, min( 120, (int) get_option( 'gdv_gemini_timeout', 60 ) ) );
 	}
 }

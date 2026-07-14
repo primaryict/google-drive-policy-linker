@@ -2,7 +2,7 @@
 Contributors: Primary ICT Support Ltd
 Requires at least: 5.8
 Requires PHP: 7.4
-Stable tag: 1.2.6
+Stable tag: 1.2.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,9 @@ Example:
 This plugin can store visitor IP addresses when users click listed documents. Site owners should mention this in their privacy policy where required.
 
 == Changelog ==
+
+= 1.2.7 =
+* Increased the default Gemini request timeout and added a configurable timeout setting.
 
 = 1.2.6 =
 * Added a Gemini Logs tab with stored review outcomes for threshold, test, and manual checks.

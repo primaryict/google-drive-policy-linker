@@ -37,6 +37,7 @@ delete_option( 'gdv_alert_emails' );
 delete_option( 'gdv_gemini_api_key' );
 delete_option( 'gdv_gemini_model' );
 delete_option( 'gdv_gemini_data_days' );
+delete_option( 'gdv_gemini_timeout' );
 delete_option( 'gdv_gemini_confidence_threshold' );
 delete_option( 'gdv_delete_data_on_uninstall' );
 delete_option( 'gdv_known_folders' );

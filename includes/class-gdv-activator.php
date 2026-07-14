@@ -73,6 +73,7 @@ class GDV_Activator {
 		add_option( 'gdv_gemini_api_key', '' );
 		add_option( 'gdv_gemini_model', GDV_Gemini_Analyzer::DEFAULT_MODEL );
 		add_option( 'gdv_gemini_data_days', 14 );
+		add_option( 'gdv_gemini_timeout', 60 );
 		add_option( 'gdv_gemini_confidence_threshold', 75 );
 		add_option( 'gdv_delete_data_on_uninstall', 0 );
 		add_option( 'gdv_known_folders', array() );
