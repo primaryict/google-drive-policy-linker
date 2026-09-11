@@ -46,6 +46,7 @@ class GDV_Admin {
 	 * @return void
 	 */
 	public function register_settings() {
+		register_setting( 'gdv_settings', 'gdv_ip_whitelist', array( $this, 'sanitize_ip_whitelist' ) );
 		register_setting( 'gdv_settings', 'gdv_api_key', array( $this, 'sanitize_text' ) );
 		register_setting( 'gdv_settings', 'gdv_cache_hours', array( $this, 'sanitize_positive_int' ) );
 		register_setting( 'gdv_settings', 'gdv_click_threshold', array( $this, 'sanitize_positive_int' ) );
@@ -348,12 +349,37 @@ class GDV_Admin {
 	}
 
 	/**
-	 * Renders the plugin settings form.
+	 * Validates labelled IP exclusions, retaining the saved list on invalid input.
 	 *
-	 * @return void
+	 * @return string
 	 */
+	public function sanitize_ip_whitelist( $value ) {
+		if ( ! is_string( $value ) ) {
+			return get_option( 'gdv_ip_whitelist', '' );
+		}
+		$entries = array();
+		foreach ( preg_split( '/\R/', $value ) as $line ) {
+			if ( '' === trim( $line ) ) {
+				continue;
+			}
+			$parts = explode( '|', $line, 2 );
+			$ip = trim( $parts[0] );
+			if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+				add_settings_error( 'gdv_ip_whitelist', 'invalid_ip', __( 'IP whitelist not saved: enter a valid IPv4 or IPv6 address on each line, optionally followed by | and a location label. Your previously saved list has been kept.', 'gdrive-folder-viewer' ) );
+				return get_option( 'gdv_ip_whitelist', '' );
+			}
+			$key = bin2hex( inet_pton( $ip ) );
+			$label = isset( $parts[1] ) ? sanitize_text_field( trim( $parts[1] ) ) : '';
+			if ( ! isset( $entries[ $key ] ) ) {
+				$entries[ $key ] = inet_ntop( inet_pton( $ip ) ) . ( '' !== $label ? ' | ' . $label : '' );
+			}
+		}
+		return implode( "\n", $entries );
+	}
+
 	private function render_settings_tab() {
 		$this->render_admin_notice();
+		settings_errors( 'gdv_ip_whitelist' );
 		?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'options.php' ) ); ?>">
 			<?php settings_fields( 'gdv_settings' ); ?>
@@ -407,12 +433,37 @@ class GDV_Admin {
 					</td>
 				</tr>
 			</table>
+			<h2><?php esc_html_e( 'IP whitelist', 'gdrive-folder-viewer' ); ?></h2>
+			<p><?php esc_html_e( 'Clicks from these addresses will not be recorded or counted towards alerts. This applies to everyone sharing that public IP address. Existing click history is retained.', 'gdrive-folder-viewer' ); ?></p>
+			<?php $current_ip = GDV_Click_Tracker::get_visitor_ip_address(); ?>
+			<p><?php esc_html_e( 'Your IP address detected by this website:', 'gdrive-folder-viewer' ); ?> <strong><?php echo esc_html( $current_ip ?: __( 'Unavailable', 'gdrive-folder-viewer' ) ); ?></strong>. <?php esc_html_e( 'Add this IP to the list to exclude clicks from your current location.', 'gdrive-folder-viewer' ); ?></p>
+			<p class="description"><?php esc_html_e( 'If your site uses a proxy, your host must configure it to pass the real visitor IP address to WordPress.', 'gdrive-folder-viewer' ); ?></p>
+			<p><label for="gdv_ip_location"><?php esc_html_e( 'Current location label', 'gdrive-folder-viewer' ); ?></label>
+			<input id="gdv_ip_location" type="text" class="regular-text" placeholder="Main school office">
+			<button type="button" class="button" id="gdv_add_current_ip" data-ip="<?php echo esc_attr( $current_ip ); ?>" <?php disabled( '' === $current_ip ); ?>><?php esc_html_e( 'Add my current IP', 'gdrive-folder-viewer' ); ?></button></p>
+			<p><label for="gdv_ip_whitelist"><?php esc_html_e( 'Excluded IP addresses and location labels', 'gdrive-folder-viewer' ); ?></label></p>
+			<textarea name="gdv_ip_whitelist" id="gdv_ip_whitelist" rows="7" class="large-text code" placeholder="203.0.113.10 | Main school office"><?php echo esc_textarea( get_option( 'gdv_ip_whitelist', '' ) ); ?></textarea>
+			<p class="description"><?php esc_html_e( 'Enter one IPv4 or IPv6 address per line, followed by | and an optional label. Use Save Changes to apply the list. To remove an exclusion, delete its line and save.', 'gdrive-folder-viewer' ); ?></p>
+			<p id="gdv_ip_status" role="status" aria-live="polite"></p>
+			<script>
+			document.getElementById('gdv_add_current_ip').addEventListener('click', function () {
+				const list = document.getElementById('gdv_ip_whitelist');
+				const ip = this.dataset.ip;
+				const exists = list.value.split(/\r?\n/).some(line => line.split('|')[0].trim() === ip);
+				if (!exists && ip) {
+					const label = document.getElementById('gdv_ip_location').value.replace(/[\r\n|]/g, ' ').trim();
+					list.value = list.value.trimEnd() + (list.value.trim() ? '\n' : '') + ip + (label ? ' | ' + label : '');
+				}
+				document.getElementById('gdv_ip_status').textContent = <?php echo wp_json_encode( __( 'Your IP is in the list. Select Save Changes to apply it.', 'gdrive-folder-viewer' ) ); ?>;
+			});
+			</script>
 			<?php submit_button(); ?>
 		</form>
 
 		<hr>
 
 		<h2><?php esc_html_e( 'Tools', 'gdrive-folder-viewer' ); ?></h2>
+		<?php GDV_Settings_Transfer::render_controls(); ?>
 		<p><?php esc_html_e( 'Shortcode example:', 'gdrive-folder-viewer' ); ?> <code>[gdrive_folder id="GOOGLE_DRIVE_FOLDER_ID" title="Policies"]</code></p>
 		<?php $this->render_known_folders(); ?>
 
@@ -1105,6 +1156,9 @@ class GDV_Admin {
 		$text   = '';
 
 		switch ( $notice ) {
+			case 'settings_imported':
+				$text = __( 'Settings imported. Review this school\'s alert recipients, IP whitelist and API key restrictions before use.', 'gdrive-folder-viewer' );
+				break;
 			case 'cache_cleared':
 				$text = __( 'Folder cache cleared.', 'gdrive-folder-viewer' );
 				break;

@@ -37,6 +37,10 @@ class GDV_Click_Tracker {
 			wp_send_json_success( array( 'ignored' => 'bot' ) );
 		}
 
+		if ( self::is_whitelisted_ip( $ip_address ) ) {
+			wp_send_json_success( array( 'ignored' => 'whitelisted_ip' ) );
+		}
+
 		global $wpdb;
 		$table = $wpdb->prefix . GDV_TABLE_NAME;
 		$this->maybe_create_table();
@@ -526,7 +530,13 @@ class GDV_Click_Tracker {
 		$body  = '<div style="background:#f3f7fb;margin:0;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#193255;">';
 		$body .= '<div style="background:#ffffff;border-top:6px solid #00809b;margin:0 auto;max-width:760px;padding:0;">';
 		$body .= '<div style="padding:24px 28px 18px;">';
-		$body .= '<p style="color:#00809b;font-size:12px;font-weight:700;letter-spacing:0;margin:0 0 8px;text-transform:uppercase;">Primary ICT Support</p>';
+		$logo_id = (int) get_theme_mod( 'custom_logo' );
+		$logo_url = $logo_id ? wp_get_attachment_image_url( $logo_id, 'medium' ) : false;
+		if ( $logo_url ) {
+			$body .= '<img src="' . esc_url( $logo_url ) . '" alt="' . esc_attr( $site_name ) . '" width="200" style="display:block;width:200px;max-width:100%;height:auto;margin:0 0 18px;">';
+		} else {
+			$body .= '<p style="color:#00809b;font-size:12px;font-weight:700;letter-spacing:0;margin:0 0 8px;text-transform:uppercase;">Primary ICT Support</p>';
+		}
 		$body .= '<h1 style="color:#193255;font-size:24px;line-height:1.25;margin:0;">Policy document activity alert</h1>';
 		$body .= '<p style="color:#526579;font-size:15px;line-height:1.6;margin:12px 0 0;">An unusual level of policy document activity has been detected on ' . esc_html( $site_name ) . '.</p>';
 		$body .= '</div>';
@@ -753,10 +763,25 @@ class GDV_Click_Tracker {
 	 *
 	 * @return string
 	 */
-	private function get_visitor_ip_address() {
+	public static function get_visitor_ip_address() {
 		$ip_address = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
 
-		return substr( $ip_address, 0, 45 );
+		return filter_var( $ip_address, FILTER_VALIDATE_IP ) ? $ip_address : '';
+	}
+
+	public static function is_whitelisted_ip( $ip_address ) {
+		if ( ! filter_var( $ip_address, FILTER_VALIDATE_IP ) ) {
+			return false;
+		}
+		foreach ( preg_split( '/\R/', (string) get_option( 'gdv_ip_whitelist', '' ) ) as $line ) {
+			$parts = explode( '|', $line, 2 );
+			$excluded = trim( $parts[0] );
+			// Compare packed addresses so equivalent IPv6 spellings match.
+			if ( filter_var( $excluded, FILTER_VALIDATE_IP ) && inet_pton( $excluded ) === inet_pton( $ip_address ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

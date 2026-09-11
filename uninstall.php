@@ -29,6 +29,7 @@ if ( is_array( $known_folders ) ) {
 }
 
 delete_option( 'gdv_api_key' );
+delete_option( 'gdv_ip_whitelist' );
 delete_option( 'gdv_cache_hours' );
 delete_option( 'gdv_click_threshold' );
 delete_option( 'gdv_threshold_window_hours' );

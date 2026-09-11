@@ -2,7 +2,7 @@
 Contributors: Primary ICT Support Ltd
 Requires at least: 5.8
 Requires PHP: 7.4
-Stable tag: 1.2.7
+Stable tag: 1.2.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,12 @@ Example:
 This plugin can store visitor IP addresses when users click listed documents. Site owners should mention this in their privacy policy where required.
 
 == Changelog ==
+
+= 1.2.8 =
+* Export and import saved plugin settings as JSON for deployment across schools, including design, Gemini credentials and IP exclusions.
+* Use the WordPress site logo at the top of alert emails when configured.
+* Add labelled IPv4 and IPv6 exclusions in Settings, with an add-current-IP button.
+* Skip excluded clicks before recording or checking alert thresholds; existing history is retained.
 
 = 1.2.7 =
 * Increased the default Gemini request timeout and added a configurable timeout setting.
