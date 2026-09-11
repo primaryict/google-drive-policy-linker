@@ -2,7 +2,7 @@
 Contributors: Primary ICT Support Ltd
 Requires at least: 5.8
 Requires PHP: 7.4
-Stable tag: 1.2.8
+Stable tag: 1.2.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,11 @@ Example:
 This plugin can store visitor IP addresses when users click listed documents. Site owners should mention this in their privacy policy where required.
 
 == Changelog ==
+
+= 1.2.9 =
+* Move IP exclusions into a dedicated Whitelist tab with independent saving.
+* Move settings transfer and maintenance actions into a Tools tab.
+* Match secondary buttons and whitelist fields to the plugin colours, with wrapping navigation.
 
 = 1.2.8 =
 * Export and import saved plugin settings as JSON for deployment across schools, including design, Gemini credentials and IP exclusions.

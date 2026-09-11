@@ -19,7 +19,7 @@ class GDV_Settings_Transfer {
 
 	private function allowed_settings() {
 		return array_filter( get_registered_settings(), function ( $setting, $name ) {
-			return 0 === strpos( $name, 'gdv_' ) && in_array( $setting['group'], array( 'gdv_settings', 'gdv_design_settings', 'gdv_gemini_settings' ), true );
+			return 0 === strpos( $name, 'gdv_' ) && in_array( $setting['group'], array( 'gdv_settings', 'gdv_design_settings', 'gdv_gemini_settings', 'gdv_whitelist_settings' ), true );
 		}, ARRAY_FILTER_USE_BOTH );
 	}
 
@@ -90,13 +90,12 @@ class GDV_Settings_Transfer {
 		foreach ( array_keys( (array) get_option( 'gdv_known_folders', array() ) ) as $folder_id ) {
 			$api->clear_cache( $folder_id );
 		}
-		wp_safe_redirect( admin_url( 'admin.php?page=gdv-settings&gdv_notice=settings_imported' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=gdv-settings&tab=tools&gdv_notice=settings_imported' ) );
 		exit;
 	}
 
 	public static function render_controls() {
 		?>
-		<hr>
 		<h2><?php esc_html_e( 'Export and import settings', 'gdrive-folder-viewer' ); ?></h2>
 		<p><?php esc_html_e( 'Download saved general, design and Gemini settings, including IP exclusions. Save any pending changes before exporting. Click history, Gemini logs, site logos and page shortcodes are not included.', 'gdrive-folder-viewer' ); ?></p>
 		<p><?php esc_html_e( 'The file includes your API keys. Keep it private. When importing to another school, review alert recipients, IP exclusions and any website restrictions on your API keys.', 'gdrive-folder-viewer' ); ?></p>
@@ -111,7 +110,7 @@ class GDV_Settings_Transfer {
 			<?php wp_nonce_field( 'gdv_import_settings' ); ?>
 			<label for="gdv_settings_file"><?php esc_html_e( 'Settings file (JSON, maximum 1 MB)', 'gdrive-folder-viewer' ); ?></label>
 			<input id="gdv_settings_file" name="gdv_settings_file" type="file" accept=".json,application/json" required>
-			<?php submit_button( __( 'Import Settings', 'gdrive-folder-viewer' ), 'secondary' ); ?>
+			<?php submit_button( __( 'Import Settings', 'gdrive-folder-viewer' ), 'primary' ); ?>
 		</form>
 		<?php
 	}

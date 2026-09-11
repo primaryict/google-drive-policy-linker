@@ -391,6 +391,7 @@ if ( ! class_exists( 'Primary_ICT_Support_Admin_Menu' ) ) {
 				}
 
 				.picts-plugin-page .nav-tab-wrapper {
+					flex-wrap: wrap;
 					border-bottom: 0;
 					display: flex;
 					gap: 8px;
@@ -454,23 +455,49 @@ if ( ! class_exists( 'Primary_ICT_Support_Admin_Menu' ) ) {
 				.picts-plugin-page input[type="search"],
 				.picts-plugin-page input[type="password"],
 				.picts-plugin-page input[type="date"],
-				.picts-plugin-page select {
+				.picts-plugin-page select,
+				.picts-plugin-page textarea {
 					border-color: var(--picts-border);
 				}
 
 				.picts-plugin-page input:focus,
-				.picts-plugin-page select:focus {
+				.picts-plugin-page select:focus,
+				.picts-plugin-page textarea:focus {
 					border-color: var(--picts-teal);
 					box-shadow: 0 0 0 1px var(--picts-teal);
 				}
 
+				.picts-plugin-page .button {
+					color: var(--picts-teal);
+					border-color: var(--picts-teal);
+					background: #fff;
+				}
+
+				.picts-plugin-page .button:hover,
+				.picts-plugin-page .button:focus {
+					color: #006f86;
+					border-color: #006f86;
+					background: var(--picts-soft);
+				}
+
+				.picts-plugin-page .button:focus {
+					box-shadow: 0 0 0 1px var(--picts-teal);
+				}
+
+				.picts-plugin-page input[type="file"],
+				.picts-plugin-page input.regular-text {
+					max-width: 100%;
+				}
+
 				.picts-plugin-page .button-primary {
+					color: #fff;
 					background: var(--picts-teal);
 					border-color: var(--picts-teal);
 				}
 
 				.picts-plugin-page .button-primary:hover,
 				.picts-plugin-page .button-primary:focus {
+					color: #fff;
 					background: #006f86;
 					border-color: #006f86;
 				}

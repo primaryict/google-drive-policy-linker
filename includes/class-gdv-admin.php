@@ -46,7 +46,7 @@ class GDV_Admin {
 	 * @return void
 	 */
 	public function register_settings() {
-		register_setting( 'gdv_settings', 'gdv_ip_whitelist', array( $this, 'sanitize_ip_whitelist' ) );
+		register_setting( 'gdv_whitelist_settings', 'gdv_ip_whitelist', array( $this, 'sanitize_ip_whitelist' ) );
 		register_setting( 'gdv_settings', 'gdv_api_key', array( $this, 'sanitize_text' ) );
 		register_setting( 'gdv_settings', 'gdv_cache_hours', array( $this, 'sanitize_positive_int' ) );
 		register_setting( 'gdv_settings', 'gdv_click_threshold', array( $this, 'sanitize_positive_int' ) );
@@ -84,7 +84,7 @@ class GDV_Admin {
 		}
 
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'settings';
-		$tab = in_array( $tab, array( 'settings', 'design', 'stats', 'gemini', 'gemini-logs' ), true ) ? $tab : 'settings';
+		$tab = in_array( $tab, array( 'settings', 'design', 'stats', 'gemini', 'gemini-logs', 'whitelist', 'tools' ), true ) ? $tab : 'settings';
 
 		echo '<div class="wrap picts-dashboard picts-plugin-page">';
 		echo '<div class="picts-plugin-page__hero">';
@@ -106,6 +106,10 @@ class GDV_Admin {
 			$this->render_gemini_logs_tab();
 		} elseif ( 'design' === $tab ) {
 			$this->render_design_tab();
+		} elseif ( 'whitelist' === $tab ) {
+			$this->render_whitelist_tab();
+		} elseif ( 'tools' === $tab ) {
+			$this->render_tools_tab();
 		} else {
 			$this->render_settings_tab();
 		}
@@ -130,7 +134,7 @@ class GDV_Admin {
 			$api->clear_cache( $folder_id );
 		}
 
-		$this->redirect_with_notice( 'cache_cleared' );
+		$this->redirect_with_notice( 'cache_cleared', 'tools' );
 	}
 
 	/**
@@ -147,7 +151,7 @@ class GDV_Admin {
 		$analysis     = $tracker->get_gemini_analysis_for_alert( $window_hours, 'test', $count );
 		$sent         = $tracker->send_alert_email( $count, $window_hours, true, $analysis );
 
-		$this->redirect_with_notice( $sent ? 'test_sent' : 'test_failed' );
+		$this->redirect_with_notice( $sent ? 'test_sent' : 'test_failed', 'tools' );
 	}
 
 	/**
@@ -338,6 +342,8 @@ class GDV_Admin {
 		$stats_url    = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=stats' );
 		$gemini_url   = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=gemini' );
 		$logs_url     = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=gemini-logs' );
+		$whitelist_url = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=whitelist' );
+		$tools_url = admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=tools' );
 
 		echo '<h2 class="nav-tab-wrapper">';
 		echo '<a class="nav-tab ' . esc_attr( 'settings' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $settings_url ) . '">' . esc_html__( 'Settings', 'gdrive-folder-viewer' ) . '</a>';
@@ -345,6 +351,8 @@ class GDV_Admin {
 		echo '<a class="nav-tab ' . esc_attr( 'stats' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $stats_url ) . '">' . esc_html__( 'Click Stats', 'gdrive-folder-viewer' ) . '</a>';
 		echo '<a class="nav-tab ' . esc_attr( 'gemini' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $gemini_url ) . '">' . esc_html__( 'Gemini AI', 'gdrive-folder-viewer' ) . '</a>';
 		echo '<a class="nav-tab ' . esc_attr( 'gemini-logs' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $logs_url ) . '">' . esc_html__( 'Gemini Logs', 'gdrive-folder-viewer' ) . '</a>';
+		echo '<a class="nav-tab ' . esc_attr( 'whitelist' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $whitelist_url ) . '">' . esc_html__( 'Whitelist', 'gdrive-folder-viewer' ) . '</a>';
+		echo '<a class="nav-tab ' . esc_attr( 'tools' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $tools_url ) . '">' . esc_html__( 'Tools', 'gdrive-folder-viewer' ) . '</a>';
 		echo '</h2>';
 	}
 
@@ -379,7 +387,6 @@ class GDV_Admin {
 
 	private function render_settings_tab() {
 		$this->render_admin_notice();
-		settings_errors( 'gdv_ip_whitelist' );
 		?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'options.php' ) ); ?>">
 			<?php settings_fields( 'gdv_settings' ); ?>
@@ -433,6 +440,16 @@ class GDV_Admin {
 					</td>
 				</tr>
 			</table>
+			<?php submit_button(); ?>
+		</form>
+		<?php
+	}
+
+	private function render_whitelist_tab() {
+		settings_errors();
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'options.php' ) ); ?>">
+			<?php settings_fields( 'gdv_whitelist_settings' ); ?>
 			<h2><?php esc_html_e( 'IP whitelist', 'gdrive-folder-viewer' ); ?></h2>
 			<p><?php esc_html_e( 'Clicks from these addresses will not be recorded or counted towards alerts. This applies to everyone sharing that public IP address. Existing click history is retained.', 'gdrive-folder-viewer' ); ?></p>
 			<?php $current_ip = GDV_Click_Tracker::get_visitor_ip_address(); ?>
@@ -460,10 +477,15 @@ class GDV_Admin {
 			<?php submit_button(); ?>
 		</form>
 
-		<hr>
+		<?php
+	}
 
-		<h2><?php esc_html_e( 'Tools', 'gdrive-folder-viewer' ); ?></h2>
+	private function render_tools_tab() {
+		$this->render_admin_notice();
+		?>
 		<?php GDV_Settings_Transfer::render_controls(); ?>
+		<hr>
+		<h2><?php esc_html_e( 'Maintenance', 'gdrive-folder-viewer' ); ?></h2>
 		<p><?php esc_html_e( 'Shortcode example:', 'gdrive-folder-viewer' ); ?> <code>[gdrive_folder id="GOOGLE_DRIVE_FOLDER_ID" title="Policies"]</code></p>
 		<?php $this->render_known_folders(); ?>
 
