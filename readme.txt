@@ -2,7 +2,7 @@
 Contributors: Primary ICT Support Ltd
 Requires at least: 5.8
 Requires PHP: 7.4
-Stable tag: 1.2.9
+Stable tag: 1.2.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,14 @@ Example:
 This plugin can store visitor IP addresses when users click listed documents. Site owners should mention this in their privacy policy where required.
 
 == Changelog ==
+
+= 1.2.10 =
+* Add a Clear Folder Cache button beside the Google API cache-duration setting.
+* Prevent overlapping automatic reviews and duplicate alerts with an atomic review lock.
+* Space Gemini calls at least 60 seconds apart per site, including manual checks and test alerts.
+* Retry temporary review errors up to three total attempts before sending one failure notification.
+* Respect retry delays and stop retries for explicit daily quota or configuration errors.
+* Retry timing depends on WordPress cron; Google project quotas are shared across sites.
 
 = 1.2.9 =
 * Move IP exclusions into a dedicated Whitelist tab with independent saving.

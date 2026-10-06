@@ -29,6 +29,11 @@ if ( is_array( $known_folders ) ) {
 }
 
 delete_option( 'gdv_api_key' );
+wp_clear_scheduled_hook( 'gdv_retry_review' );
+delete_option( 'gdv_pending_review' );
+delete_option( 'gdv_review_lock' );
+delete_option( 'gdv_gemini_request_slot' );
+delete_option( 'gdv_gemini_blocked_until' );
 delete_option( 'gdv_ip_whitelist' );
 delete_option( 'gdv_cache_hours' );
 delete_option( 'gdv_click_threshold' );

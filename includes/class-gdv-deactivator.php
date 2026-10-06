@@ -18,5 +18,8 @@ class GDV_Deactivator {
 	 */
 	public static function deactivate() {
 		wp_clear_scheduled_hook( 'gdv_check_click_threshold' );
+		wp_clear_scheduled_hook( 'gdv_retry_review' );
+		delete_option( 'gdv_pending_review' );
+		delete_option( 'gdv_review_lock' );
 	}
 }

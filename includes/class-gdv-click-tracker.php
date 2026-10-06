@@ -14,6 +14,7 @@ class GDV_Click_Tracker {
 		add_action( 'wp_ajax_gdv_track_click', array( $this, 'handle_track_click' ) );
 		add_action( 'wp_ajax_nopriv_gdv_track_click', array( $this, 'handle_track_click' ) );
 		add_action( 'gdv_check_click_threshold', array( $this, 'check_threshold' ) );
+		add_action( 'gdv_retry_review', array( $this, 'check_threshold' ) );
 	}
 
 	/**
@@ -74,33 +75,76 @@ class GDV_Click_Tracker {
 	 * @return void
 	 */
 	public function check_threshold() {
+		$lock = GDV_Request_Guard::acquire( 'gdv_review_lock', 300 );
+		if ( ! $lock ) { return; }
+		try {
+			$this->process_threshold_review();
+		} finally {
+			GDV_Request_Guard::release( 'gdv_review_lock', $lock );
+		}
+	}
+
+	private function schedule_review( $when ) {
+		wp_clear_scheduled_hook( 'gdv_retry_review' );
+		wp_schedule_single_event( $when, 'gdv_retry_review' );
+	}
+
+	private function process_threshold_review() {
+		$pending = get_option( 'gdv_pending_review', array() );
+		if ( $pending && (int) $pending['next'] > time() ) {
+			if ( ! wp_next_scheduled( 'gdv_retry_review' ) ) { $this->schedule_review( (int) $pending['next'] ); }
+			return;
+		}
 		$window_hours = max( 1, (int) get_option( 'gdv_threshold_window_hours', 24 ) );
 		$threshold    = max( 1, (int) get_option( 'gdv_click_threshold', 20 ) );
 		$cooldown     = max( 0, (int) get_option( 'gdv_alert_cooldown_hours', 24 ) );
 
 		$count = $this->get_click_count( $window_hours );
 
-		if ( $count < $threshold ) {
+		if ( ! $pending && $count < $threshold ) {
 			return;
 		}
 
 		$last_alert = get_option( 'gdv_last_alert_sent', '' );
-		if ( ! empty( $last_alert ) ) {
+		if ( ! $pending && ! empty( $last_alert ) ) {
 			$hours_since_last = $this->get_hours_since_datetime( $last_alert );
 			if ( $hours_since_last < $cooldown ) {
 				return; // Still within the cooldown period; don't send again.
 			}
 		}
 
-		$analysis = $this->get_gemini_analysis_for_alert( $window_hours, 'automatic', $count );
-
-		if ( is_array( $analysis ) && empty( $analysis['send_alert'] ) ) {
-			update_option( 'gdv_last_alert_sent', $this->get_current_datetime() );
+		if ( ! $pending ) { $pending = array( 'attempts' => 0, 'count' => $count, 'window' => $window_hours ); }
+		$count = $pending['count'];
+		$window_hours = $pending['window'];
+		// Save a watchdog before network I/O so a crashed worker can recover.
+		$pending['attempts']++;
+		$pending['next'] = time() + 310;
+		update_option( 'gdv_pending_review', $pending, false );
+		$this->schedule_review( $pending['next'] );
+		$analysis = $pending['attempts'] <= 3
+			? $this->get_gemini_analysis_for_alert( $window_hours, 'automatic', $count )
+			: array( 'error' => 'The previous review attempts did not complete.', 'error_data' => array( 'terminal' => true ) );
+		$data = $analysis['error_data'] ?? array();
+		if ( ! empty( $data['wait'] ) ) { $pending['attempts']--; }
+		if ( ! empty( $analysis['error'] ) && empty( $data['terminal'] ) && $pending['attempts'] < 3 ) {
+			$pending['next'] = time() + max( 60 * max( 1, $pending['attempts'] ), (int) ( $data['delay'] ?? 60 ) ) + wp_rand( 5, 15 );
+			update_option( 'gdv_pending_review', $pending, false );
+			$this->schedule_review( $pending['next'] );
 			return;
 		}
-
-		$this->send_alert_email( $count, $window_hours, false, $analysis );
+		// Claim completion before mail I/O; parallel checks must not resend it.
 		update_option( 'gdv_last_alert_sent', $this->get_current_datetime() );
+		delete_option( 'gdv_pending_review' );
+		wp_clear_scheduled_hook( 'gdv_retry_review' );
+		if ( ! empty( $analysis['error'] ) ) {
+			$analysis['error'] = sprintf( 'The automated review could not be completed after %d attempt(s). No assessment of this activity is available. Please review the click stats manually. %s', min( 3, $pending['attempts'] ), $analysis['error'] );
+			$analysis['review_failed'] = true;
+			$analysis['send_alert'] = true;
+		}
+		if ( ! empty( $analysis['send_alert'] ) ) {
+			$sent = $this->send_alert_email( $count, $window_hours, false, $analysis );
+			GDV_Gemini_Log::insert( array( 'source' => 'automatic', 'status' => $sent ? 'complete' : 'error', 'trigger_count' => $count, 'trigger_window_hours' => $window_hours, 'alert_sent' => $sent, 'error_message' => $analysis['error'] ?? ( $sent ? '' : 'WordPress could not send the alert email.' ) ) );
+		}
 	}
 
 	/**
@@ -500,6 +544,7 @@ class GDV_Click_Tracker {
 		$subject = $is_test
 			? sprintf( '[%s] TEST: policy document activity alert', $site_name )
 			: sprintf( '[%s] Unusual policy document activity detected', $site_name );
+		if ( ! empty( $analysis['review_failed'] ) ) { $subject = sprintf( '[%s] Policy activity review unavailable', $site_name ); }
 
 		$graph_url = $this->get_click_graph_image_url( 14, 6, 900, 360 );
 		$body      = $this->get_alert_email_body( $site_name, $count, $window_hours, $top_files, $graph_url, $is_test, $analysis );
@@ -538,7 +583,7 @@ class GDV_Click_Tracker {
 			$body .= '<p style="color:#00809b;font-size:12px;font-weight:700;letter-spacing:0;margin:0 0 8px;text-transform:uppercase;">Primary ICT Support</p>';
 		}
 		$body .= '<h1 style="color:#193255;font-size:24px;line-height:1.25;margin:0;">Policy document activity alert</h1>';
-		$body .= '<p style="color:#526579;font-size:15px;line-height:1.6;margin:12px 0 0;">An unusual level of policy document activity has been detected on ' . esc_html( $site_name ) . '.</p>';
+		$body .= '<p style="color:#526579;font-size:15px;line-height:1.6;margin:12px 0 0;">The policy activity review threshold was reached on ' . esc_html( $site_name ) . '.</p>';
 		$body .= '</div>';
 		$body .= '<div style="padding:0 28px 24px;">';
 		$body .= $test_banner;
@@ -599,7 +644,7 @@ class GDV_Click_Tracker {
 
 		if ( ! empty( $analysis['error'] ) ) {
 			return sprintf(
-				'The follow-up activity review could not be completed, so this alert has been sent from the click threshold alone. Review detail: %s',
+				'The follow-up activity review could not be completed. Review detail: %s',
 				$analysis['error']
 			);
 		}
@@ -672,7 +717,7 @@ class GDV_Click_Tracker {
 					'trigger_window_hours' => $window_hours,
 					'data_window_days'     => $data_days,
 					'model'                => $analyzer->get_model(),
-					'alert_sent'           => true,
+						'alert_sent'           => false,
 					'error_message'        => __( 'Gemini API key is not configured.', 'gdrive-folder-viewer' ),
 				)
 			);
@@ -684,8 +729,10 @@ class GDV_Click_Tracker {
 
 		$analysis = $analyzer->analyze_recent_days( $data_days );
 
-		if ( is_wp_error( $analysis ) ) {
-			GDV_Gemini_Log::insert(
+			if ( is_wp_error( $analysis ) ) {
+				$pending_review = get_option( 'gdv_pending_review', array() );
+				$attempt_note = 'automatic' === $source ? sprintf( 'Attempt %d of 3. ', min( 3, (int) ( $pending_review['attempts'] ?? 1 ) ) ) : '';
+				GDV_Gemini_Log::insert(
 				array(
 					'source'               => $source,
 					'status'               => 'error',
@@ -693,14 +740,15 @@ class GDV_Click_Tracker {
 					'trigger_window_hours' => $window_hours,
 					'data_window_days'     => $data_days,
 					'model'                => $analyzer->get_model(),
-					'alert_sent'           => true,
-					'error_message'        => $analysis->get_error_message(),
+						'alert_sent'           => false,
+						'error_message'        => $attempt_note . $analysis->get_error_message(),
 				)
 			);
 
 			return array(
 				'send_alert' => true,
-				'error'      => $analysis->get_error_message(),
+					'error'      => $analysis->get_error_message(),
+					'error_data' => (array) $analysis->get_error_data(),
 			);
 		}
 
@@ -714,7 +762,7 @@ class GDV_Click_Tracker {
 				'trigger_window_hours' => $window_hours,
 				'data_window_days'     => $data_days,
 				'model'                => $analyzer->get_model(),
-				'alert_sent'           => $send_alert || 'test' === $source,
+						'alert_sent'           => false,
 				'analysis'             => $analysis,
 			)
 		);

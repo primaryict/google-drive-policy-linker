@@ -116,7 +116,14 @@ class GDV_Gemini_Analyzer {
 			return new WP_Error( 'gdv_gemini_no_data', __( 'No click data is available for Gemini analysis in this date range.', 'gdrive-folder-viewer' ) );
 		}
 
-		$response = wp_remote_post(
+			$blocked_until = (int) get_option( 'gdv_gemini_blocked_until', 0 );
+			if ( $blocked_until > time() ) {
+				return new WP_Error( 'gdv_gemini_daily_quota', 'Gemini daily quota is exhausted. Please try after the next quota reset.', array( 'terminal' => true ) );
+			}
+			if ( ! GDV_Request_Guard::acquire( 'gdv_gemini_request_slot', max( 60, $this->get_request_timeout() + 10 ) ) ) {
+				return new WP_Error( 'gdv_gemini_wait', 'Please wait before requesting another Gemini review.', array( 'wait' => true, 'delay' => 70 ) );
+			}
+			$response = wp_remote_post(
 			$this->get_endpoint( $api_key ),
 			array(
 				'timeout' => $this->get_request_timeout(),
@@ -133,15 +140,35 @@ class GDV_Gemini_Analyzer {
 
 		$response_code = (int) wp_remote_retrieve_response_code( $response );
 
-		if ( 200 !== $response_code ) {
-			return new WP_Error(
+			if ( 200 !== $response_code ) {
+				$body = json_decode( wp_remote_retrieve_body( $response ), true );
+				$message = isset( $body['error']['message'] ) && is_string( $body['error']['message'] ) ? $body['error']['message'] : '';
+				$message = substr( sanitize_text_field( str_replace( $api_key, '[redacted]', $message ) ), 0, 500 );
+				$details = $body['error']['details'] ?? array();
+				$daily = false;
+				$delay = 60;
+				foreach ( (array) $details as $detail ) {
+					if ( ! is_array( $detail ) ) { continue; }
+					if ( isset( $detail['retryDelay'] ) ) { $delay = max( $delay, (int) ceil( (float) $detail['retryDelay'] ) ); }
+					foreach ( (array) ( $detail['violations'] ?? array() ) as $violation ) {
+						if ( preg_match( '/per.?day|daily/i', (string) ( $violation['quotaId'] ?? '' ) . ' ' . (string) ( $violation['quotaMetric'] ?? '' ) ) ) { $daily = true; }
+					}
+				}
+				$retry_after = wp_remote_retrieve_header( $response, 'retry-after' );
+				if ( $retry_after ) { $delay = max( $delay, is_numeric( $retry_after ) ? (int) $retry_after : (int) strtotime( $retry_after ) - time() ); }
+				if ( 429 === $response_code && $daily ) {
+					$reset = new DateTimeImmutable( 'tomorrow', new DateTimeZone( 'America/Los_Angeles' ) );
+					update_option( 'gdv_gemini_blocked_until', $reset->getTimestamp(), false );
+				}
+				return new WP_Error(
 				'gdv_gemini_http_error',
 				sprintf(
 					/* translators: 1: HTTP status code, 2: Gemini model name */
 					__( 'Gemini API returned HTTP status %1$d for model %2$s.', 'gdrive-folder-viewer' ),
 					$response_code,
 					$this->get_model()
-				)
+					) . ( $message ? ' ' . $message : '' ),
+					array( 'terminal' => $daily || in_array( $response_code, array( 400, 401, 403, 404 ), true ), 'delay' => $delay, 'http_status' => $response_code )
 			);
 		}
 

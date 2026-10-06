@@ -134,7 +134,8 @@ class GDV_Admin {
 			$api->clear_cache( $folder_id );
 		}
 
-		$this->redirect_with_notice( 'cache_cleared', 'tools' );
+		$tab = isset( $_POST['return_tab'] ) && 'settings' === $_POST['return_tab'] ? 'settings' : 'tools';
+		$this->redirect_with_notice( 'cache_cleared', $tab );
 	}
 
 	/**
@@ -149,7 +150,11 @@ class GDV_Admin {
 		$window_hours = max( 1, (int) get_option( 'gdv_threshold_window_hours', 24 ) );
 		$count        = $tracker->get_click_count( $window_hours );
 		$analysis     = $tracker->get_gemini_analysis_for_alert( $window_hours, 'test', $count );
+		if ( ! empty( $analysis['error'] ) ) {
+			wp_die( esc_html( $analysis['error'] ), esc_html__( 'Test review not completed', 'gdrive-folder-viewer' ), array( 'back_link' => true ) );
+		}
 		$sent         = $tracker->send_alert_email( $count, $window_hours, true, $analysis );
+		GDV_Gemini_Log::insert( array( 'source' => 'test', 'status' => $sent ? 'complete' : 'error', 'trigger_count' => $count, 'trigger_window_hours' => $window_hours, 'alert_sent' => $sent, 'analysis' => $analysis['analysis'] ?? array(), 'error_message' => $sent ? '' : 'WordPress could not send the test email.' ) );
 
 		$this->redirect_with_notice( $sent ? 'test_sent' : 'test_failed', 'tools' );
 	}
@@ -388,6 +393,11 @@ class GDV_Admin {
 	private function render_settings_tab() {
 		$this->render_admin_notice();
 		?>
+		<form id="gdv-settings-clear-cache" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="gdv_clear_cache">
+			<input type="hidden" name="return_tab" value="settings">
+			<input type="hidden" name="_wpnonce" value="<?php echo esc_attr( wp_create_nonce( 'gdv_clear_cache' ) ); ?>">
+		</form>
 		<form method="post" action="<?php echo esc_url( admin_url( 'options.php' ) ); ?>">
 			<?php settings_fields( 'gdv_settings' ); ?>
 			<table class="form-table" role="presentation">
@@ -400,7 +410,11 @@ class GDV_Admin {
 				</tr>
 				<tr>
 					<th scope="row"><label for="gdv_cache_hours"><?php esc_html_e( 'Cache duration', 'gdrive-folder-viewer' ); ?></label></th>
-					<td><input name="gdv_cache_hours" id="gdv_cache_hours" type="number" min="1" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_cache_hours', 6 ) ); ?>"> <?php esc_html_e( 'hours', 'gdrive-folder-viewer' ); ?></td>
+					<td>
+						<input name="gdv_cache_hours" id="gdv_cache_hours" type="number" min="1" class="small-text" value="<?php echo esc_attr( get_option( 'gdv_cache_hours', 6 ) ); ?>"> <?php esc_html_e( 'hours', 'gdrive-folder-viewer' ); ?>
+						<button type="submit" form="gdv-settings-clear-cache" class="button button-secondary"><?php esc_html_e( 'Clear Folder Cache', 'gdrive-folder-viewer' ); ?></button>
+						<p class="description"><?php esc_html_e( 'Clears cached Google Drive folder results immediately. The next folder request fetches fresh results. Save any setting changes before clearing the cache.', 'gdrive-folder-viewer' ); ?></p>
+					</td>
 				</tr>
 				<tr>
 					<th scope="row"><label for="gdv_click_threshold"><?php esc_html_e( 'Review trigger threshold', 'gdrive-folder-viewer' ); ?></label></th>
