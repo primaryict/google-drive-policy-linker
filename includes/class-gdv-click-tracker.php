@@ -113,6 +113,20 @@ class GDV_Click_Tracker {
 			}
 		}
 
+		$eligibility = GDV_Inspection::check();
+		if ( GDV_Inspection::enabled() && ! ( new GDV_Gemini_Analyzer() )->is_configured() ) {
+			$eligibility = array( 'status' => 'unknown', 'reason' => 'Gemini must be configured for inspection-window alerts. Alerts are paused.' );
+		}
+		if ( ! in_array( $eligibility['status'], array( 'disabled', 'eligible' ), true ) ) {
+			delete_option( 'gdv_pending_review' );
+			wp_clear_scheduled_hook( 'gdv_retry_review' );
+			$fingerprint = md5( wp_json_encode( $eligibility ) );
+			if ( get_transient( 'gdv_inspection_logged' ) !== $fingerprint ) {
+				GDV_Gemini_Log::insert( array( 'source' => 'inspection', 'status' => 'unknown' === $eligibility['status'] ? 'error' : 'skipped', 'trigger_count' => $count, 'trigger_window_hours' => $window_hours, 'alert_sent' => false, 'error_message' => $eligibility['reason'] . ( isset( $eligibility['window'] ) ? ' Estimated inspection: ' . $eligibility['window'] : '' ) ) );
+				set_transient( 'gdv_inspection_logged', $fingerprint, 900 );
+			}
+			return;
+		}
 		if ( ! $pending ) { $pending = array( 'attempts' => 0, 'count' => $count, 'window' => $window_hours ); }
 		$count = $pending['count'];
 		$window_hours = $pending['window'];
@@ -582,7 +596,8 @@ class GDV_Click_Tracker {
 		} else {
 			$body .= '<p style="color:#00809b;font-size:12px;font-weight:700;letter-spacing:0;margin:0 0 8px;text-transform:uppercase;">Primary ICT Support</p>';
 		}
-		$body .= '<h1 style="color:#193255;font-size:24px;line-height:1.25;margin:0;">Policy document activity alert</h1>';
+		$heading = ! empty( $analysis['review_failed'] ) ? 'Policy activity review unavailable' : 'Policy document activity alert';
+		$body .= '<h1 style="color:#193255;font-size:24px;line-height:1.25;margin:0;">' . esc_html( $heading ) . '</h1>';
 		$body .= '<p style="color:#526579;font-size:15px;line-height:1.6;margin:12px 0 0;">The policy activity review threshold was reached on ' . esc_html( $site_name ) . '.</p>';
 		$body .= '</div>';
 		$body .= '<div style="padding:0 28px 24px;">';
@@ -598,7 +613,9 @@ class GDV_Click_Tracker {
 		} else {
 			$body .= '<p style="background:#f3f7fb;border:1px solid #d9e2ec;color:#526579;font-size:14px;margin:0 0 18px;padding:12px;">The activity graph could not be generated on this site.</p>';
 		}
-		$body .= '<p style="color:#526579;font-size:14px;line-height:1.6;margin:0 0 18px;">A sudden spike in policy document views can sometimes precede an Ofsted visit or inspection, as parents, staff or inspectors may review policies beforehand. It would be sensible to review the recent activity and check that published policies are up to date.</p>';
+		if ( empty( $analysis['review_failed'] ) ) {
+			$body .= '<p style="color:#526579;font-size:14px;line-height:1.6;margin:0 0 18px;">A sudden spike in policy document views can sometimes precede an Ofsted visit or inspection, as parents, staff or inspectors may review policies beforehand. It would be sensible to review the recent activity and check that published policies are up to date.</p>';
+		}
 		$body .= '<p style="margin:0;"><a href="' . esc_url( $stats_url ) . '" style="background:#00809b;color:#ffffff;display:inline-block;font-weight:700;padding:10px 16px;text-decoration:none;">View detailed stats</a></p>';
 		$body .= '</div>';
 		$body .= '</div>';

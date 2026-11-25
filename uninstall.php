@@ -29,6 +29,16 @@ if ( is_array( $known_folders ) ) {
 }
 
 delete_option( 'gdv_api_key' );
+delete_option( 'gdv_inspection_enabled' );
+delete_option( 'gdv_inspection_urn' );
+delete_option( 'gdv_inspection_expected' );
+delete_transient( 'gdv_ofsted_record' );
+delete_option( 'gdv_ofsted_lock' );
+delete_option( 'gdv_inspection_school' );
+delete_option( 'gdv_inspection_refresh' );
+delete_transient( 'gdv_inspection_rows' );
+delete_transient( 'gdv_inspection_access' );
+delete_transient( 'gdv_inspection_logged' );
 wp_clear_scheduled_hook( 'gdv_retry_review' );
 delete_option( 'gdv_pending_review' );
 delete_option( 'gdv_review_lock' );

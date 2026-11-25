@@ -2,7 +2,7 @@
 Contributors: Primary ICT Support Ltd
 Requires at least: 5.8
 Requires PHP: 7.4
-Stable tag: 1.2.10
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,13 @@ Example:
 This plugin can store visitor IP addresses when users click listed documents. Site owners should mention this in their privacy policy where required.
 
 == Changelog ==
+
+= 1.3.0 =
+* Add an optional Inspection Window tab using public Ofsted data, homepage school-link detection and manual URN fallback.
+* Gate automatic inspection reviews using conservative four-year estimates, a six-week lead-in and an optional expected-date override.
+* Pause inspection alerts on missing, ambiguous, monitoring-only or unavailable inspection data; log the reason.
+* Keep overdue schools eligible and retain existing behaviour when the inspection check is disabled.
+* Google OAuth credentials and per-site authorisation are not included in settings exports.
 
 = 1.2.10 =
 * Add a Clear Folder Cache button beside the Google API cache-duration setting.

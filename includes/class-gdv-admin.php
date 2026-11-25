@@ -46,6 +46,9 @@ class GDV_Admin {
 	 * @return void
 	 */
 	public function register_settings() {
+		register_setting( 'gdv_inspection_settings', 'gdv_inspection_enabled', array( $this, 'sanitize_checkbox' ) );
+		register_setting( 'gdv_inspection_settings', 'gdv_inspection_urn', array( 'GDV_Inspection', 'urn' ) );
+		register_setting( 'gdv_inspection_settings', 'gdv_inspection_expected', array( 'GDV_Inspection', 'sanitize_date' ) );
 		register_setting( 'gdv_whitelist_settings', 'gdv_ip_whitelist', array( $this, 'sanitize_ip_whitelist' ) );
 		register_setting( 'gdv_settings', 'gdv_api_key', array( $this, 'sanitize_text' ) );
 		register_setting( 'gdv_settings', 'gdv_cache_hours', array( $this, 'sanitize_positive_int' ) );
@@ -84,7 +87,7 @@ class GDV_Admin {
 		}
 
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'settings';
-		$tab = in_array( $tab, array( 'settings', 'design', 'stats', 'gemini', 'gemini-logs', 'whitelist', 'tools' ), true ) ? $tab : 'settings';
+		$tab = in_array( $tab, array( 'settings', 'design', 'stats', 'gemini', 'gemini-logs', 'whitelist', 'tools', 'inspection' ), true ) ? $tab : 'settings';
 
 		echo '<div class="wrap picts-dashboard picts-plugin-page">';
 		echo '<div class="picts-plugin-page__hero">';
@@ -110,6 +113,8 @@ class GDV_Admin {
 			$this->render_whitelist_tab();
 		} elseif ( 'tools' === $tab ) {
 			$this->render_tools_tab();
+		} elseif ( 'inspection' === $tab ) {
+			GDV_Inspection_Admin::render();
 		} else {
 			$this->render_settings_tab();
 		}
@@ -149,6 +154,13 @@ class GDV_Admin {
 		$tracker      = new GDV_Click_Tracker();
 		$window_hours = max( 1, (int) get_option( 'gdv_threshold_window_hours', 24 ) );
 		$count        = $tracker->get_click_count( $window_hours );
+		$eligibility = GDV_Inspection::check();
+		if ( ! in_array( $eligibility['status'], array( 'disabled', 'eligible' ), true ) ) {
+			wp_die( esc_html( $eligibility['reason'] ), 'Inspection alert suppressed', array( 'back_link' => true ) );
+		}
+		if ( GDV_Inspection::enabled() && ! ( new GDV_Gemini_Analyzer() )->is_configured() ) {
+			wp_die( 'Configure Gemini before testing inspection alerts.', 'Inspection alert suppressed', array( 'back_link' => true ) );
+		}
 		$analysis     = $tracker->get_gemini_analysis_for_alert( $window_hours, 'test', $count );
 		if ( ! empty( $analysis['error'] ) ) {
 			wp_die( esc_html( $analysis['error'] ), esc_html__( 'Test review not completed', 'gdrive-folder-viewer' ), array( 'back_link' => true ) );
@@ -358,6 +370,7 @@ class GDV_Admin {
 		echo '<a class="nav-tab ' . esc_attr( 'gemini-logs' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $logs_url ) . '">' . esc_html__( 'Gemini Logs', 'gdrive-folder-viewer' ) . '</a>';
 		echo '<a class="nav-tab ' . esc_attr( 'whitelist' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $whitelist_url ) . '">' . esc_html__( 'Whitelist', 'gdrive-folder-viewer' ) . '</a>';
 		echo '<a class="nav-tab ' . esc_attr( 'tools' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( $tools_url ) . '">' . esc_html__( 'Tools', 'gdrive-folder-viewer' ) . '</a>';
+		echo '<a class="nav-tab ' . esc_attr( 'inspection' === $active_tab ? 'nav-tab-active' : '' ) . '" href="' . esc_url( admin_url( 'admin.php?page=' . self::PAGE_SLUG . '&tab=inspection' ) ) . '">' . esc_html__( 'Inspection Window', 'gdrive-folder-viewer' ) . '</a>';
 		echo '</h2>';
 	}
 
@@ -1193,7 +1206,7 @@ class GDV_Admin {
 
 		switch ( $notice ) {
 			case 'settings_imported':
-				$text = __( 'Settings imported. Review this school\'s alert recipients, IP whitelist and API key restrictions before use.', 'gdrive-folder-viewer' );
+				$text = __( 'Settings imported. Review this school\'s alert recipients, IP whitelist, API key restrictions and Inspection Window URN and date override before enabling alerts.', 'gdrive-folder-viewer' );
 				break;
 			case 'cache_cleared':
 				$text = __( 'Folder cache cleared.', 'gdrive-folder-viewer' );

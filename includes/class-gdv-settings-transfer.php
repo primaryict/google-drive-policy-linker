@@ -19,7 +19,7 @@ class GDV_Settings_Transfer {
 
 	private function allowed_settings() {
 		return array_filter( get_registered_settings(), function ( $setting, $name ) {
-			return 0 === strpos( $name, 'gdv_' ) && in_array( $setting['group'], array( 'gdv_settings', 'gdv_design_settings', 'gdv_gemini_settings', 'gdv_whitelist_settings' ), true );
+			return 0 === strpos( $name, 'gdv_' ) && in_array( $setting['group'], array( 'gdv_settings', 'gdv_design_settings', 'gdv_gemini_settings', 'gdv_whitelist_settings', 'gdv_inspection_settings' ), true );
 		}, ARRAY_FILTER_USE_BOTH );
 	}
 
@@ -98,7 +98,7 @@ class GDV_Settings_Transfer {
 		?>
 		<h2><?php esc_html_e( 'Export and import settings', 'gdrive-folder-viewer' ); ?></h2>
 		<p><?php esc_html_e( 'Download saved general, design and Gemini settings, including IP exclusions. Save any pending changes before exporting. Click history, Gemini logs, site logos and page shortcodes are not included.', 'gdrive-folder-viewer' ); ?></p>
-		<p><?php esc_html_e( 'The file includes your API keys. Keep it private. When importing to another school, review alert recipients, IP exclusions and any website restrictions on your API keys.', 'gdrive-folder-viewer' ); ?></p>
+		<p><?php esc_html_e( 'The file includes your API keys. Keep it private. When importing to another school, review alert recipients, IP exclusions, the Inspection Window URN and expected-date override, and any website restrictions on your API keys.', 'gdrive-folder-viewer' ); ?></p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="gdv_export_settings">
 			<?php wp_nonce_field( 'gdv_export_settings' ); ?>
